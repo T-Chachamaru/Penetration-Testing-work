@@ -1,0 +1,168 @@
+# 渗透测试：靶场搭建
+
+## 一、安卓应用数据包抓取
+### 1. 安装安卓模拟器
+- **推荐工具**：Genymotion、Nox Player 或 Android Studio 自带的模拟器。
+- **步骤**：
+  1. 下载并安装安卓模拟器。
+  2. 启动模拟器并完成初始化配置，确保网络正常。
+### 2. 配置代理
+- **目标**：将模拟器的网络流量代理到主机上的 Burp Suite。
+- **步骤**：
+  1. 在主机上启动 Burp Suite，默认代理端口为 8080（可在 Proxy > Options 中确认）。
+  2. 在模拟器中打开 Wi-Fi 设置，修改代理：
+     - **代理主机**：输入主机 IP 地址（可在主机命令行用 `ipconfig` 查看）。
+     - **代理端口**：设置为 Burp Suite 的端口（默认 8080）。
+  3. 保存设置并测试网络连通性。
+### 3. 安装证书
+- **问题**：安卓设备默认不支持 Burp Suite 的 CA 证书（PEM 格式），需转换为 CER 格式。
+- **步骤**：
+  1. 在 Burp Suite 的 Proxy > Options 中，点击 “Export CA Certificate”。
+  2. 选择 “DER 格式” 导出证书，保存为 `burp.der`。
+  3. 将文件后缀改为 `.cer`（如 `burp.cer`）。
+  4. 将证书传输到模拟器（可通过拖放或 ADB 推送：`adb push burp.cer /sdcard/`）。
+  5. 在模拟器设置中打开 “安全” > “从存储设备安装证书”，选择 `burp.cer` 安装。
+  6. 重启模拟器，确保 HTTPS 流量可被拦截。
+### 4. 测试抓包
+- 打开模拟器中的应用，在 Burp Suite 的 Proxy > HTTP History 中查看是否捕获到流量。
+- 若无流量，检查代理设置或证书是否正确安装。
+
+## 二、Windows 2003 环境搭建
+### 1. 安装 Windows Server 2003 企业版
+- **准备**：获取 Windows Server 2003 企业版 ISO 文件。
+- **步骤**：
+  1. 在虚拟机软件（如 VMware 或 VirtualBox）中创建新虚拟机。
+  2. 挂载 ISO 文件并启动安装。
+  3. 按提示完成系统安装，选择默认分区和管理员密码。
+### 2. 安装 VMware Tools
+- **目的**：增强虚拟机性能，支持文件拖放和剪贴板共享。
+- **步骤**：
+  1. 在 VMware 菜单中选择 “安装 VMware Tools”。
+  2. 虚拟机中弹出光盘，运行安装程序并完成安装。
+  3. 重启虚拟机以生效。
+### 3. 配置网络
+- **网络模式**：使用 NAT 模式并启用 DHCP。
+- **步骤**：
+  1. 在虚拟机设置中将网络适配器设为 NAT。
+  2. 启动虚拟机后，打开 “网络连接”，右键 “本地连接” > “属性”。
+  3. 选择 “Internet 协议 (TCP/IP)”，设置为自动获取 IP。
+  4. 使用 `ipconfig` 确认 IP 分配成功。
+
+## 三、在 Windows 2003 上安装 PHPStudy
+### 1. 准备与安装
+- **准备**：下载 PHPStudy（建议旧版以兼容 Windows 2003）、360zip 和 Notepad++。
+- **步骤**：
+  1. 克隆一台干净的 Windows 2003 虚拟机。
+  2. 将安装包传输到虚拟机。
+  3. 使用 360zip 解压 PHPStudy 并运行安装程序。
+  4. 安装 Notepad++ 用于后续编辑配置文件。
+### 2. 验证 PHPStudy
+- **方法**：
+  1. 启动 PHPStudy，确认 Apache 和 MySQL 服务运行。
+  2. 在PHPStudy（默认 `PHPTutorial\WWW`）中拥有 `l.php`，内容为：
+     ```php
+     <?php echo "<title>php中文网 探针</title>"; phpinfo(); ?>
+     ```
+	 具有敏感信息泄露的风险，建议删除。
+  3. 在虚拟机浏览器访问 `http://localhost/l.php`，若显示 “php中文网 探针” 和 PHP 信息，说明安装成功。
+- **其他验证**：
+  - `http://localhost/phpMyAdmin`，可用于确认 MySQL 和 PHPStudy 配置正常。也具有敏感信息泄露的风险，建议删除。
+
+## 四、安装靶场 BWAPP
+### 1. 下载与配置
+- **下载**：从 SourceForge 或 GitHub 获取 BWAPP。
+- **步骤**：
+  1. 解压 BWAPP 文件。
+  2. 编辑 `settings.php`，修改数据库账号和密码（如 `root` 和自定义密码）。
+  3. 将 BWAPP 文件夹复制到 PHPStudy 的 `WWW` 目录。
+### 2. 安装
+- 在浏览器访问 `http://localhost/bwapp/install.php`，按提示完成安装。
+- 安装后访问 `http://localhost/bwapp`，登录测试（默认用户 `bee` / 密码 `bug`）。
+
+## 五、其他 PHP 靶场的安装
+### 1. PHPCMS
+- **步骤**：
+  1. 下载 PHPCMS。
+  2. 解压并复制到 `PHPTutorial\WWW`。
+  3. 访问 `http://localhost/phpcms/install`，按向导完成安装。
+- **MySQL 问题修复**：
+  - 若 MySQL 启动失败，从 `PHPTutorial` 找到 `data` 包。
+  - 解压到 `PHPTutorial\MySQL\data`，覆盖前先删除同名文件。
+### 2. Webug 3.0
+- **步骤**：
+  1. 下载 Webug 3.0（VMware 虚拟机格式）。
+  2. 解压后找到 `.vmx` 文件，双击导入 VMware。
+  3. 启动虚拟机，记录 IP 地址（如 `192.168.x.x`）。
+  4. 在主机浏览器访问 `http://<IP>`，确认靶场运行。
+
+## 六、在线靶场
+### 1. 墨者学院
+- **访问**：前往墨者学院官网，注册并选择靶场。
+- **特点**：提供多种场景，如 SQL 注入、XSS 等。
+### 2. 投票程序缺陷利用
+- **方法**：
+  1. **User-Agent 伪造**：在 Burp Suite 中修改请求头 `User-Agent`，模拟所需设备。
+  2. **Repeater 重放**：将请求发送到 Repeater，调整参数后重发。
+  3. **X-Forwarded-For 伪造 IP**：添加头字段 `X-Forwarded-For: <伪造IP>`，绕过 IP 验证。
+  4. **爆破**：使用 Intruder 模块，设置变量爆破（如投票 ID 或用户 ID）。
+
+## 七、IIS 部署靶场
+### 1. 配置 IIS
+- **步骤**：
+  1. 克隆一台 Windows 2003 虚拟机。
+  2. 打开 “控制面板” > “添加或删除程序” > “添加/删除 Windows 组件”。
+  3. 勾选 “应用程序服务器” > “Internet 信息服务 (IIS)” 和 “ASP” 支持，完成安装。
+  4. 打开 “IIS 管理器”，右键 “默认网站” > “属性” > “主目录”，启用 “目录浏览”。
+  5. 在 “Web 服务扩展” 中启用 ASP。
+### 2. 部署 ASP 靶场
+- 将 ASP 项目（如简单的留言板）复制到 `C:\Inetpub\wwwroot`，访问 `http://localhost` 测试。
+
+## 八、ASPX 部署靶场
+### 1. 安装 SQL Server
+- **步骤**：
+  1. 下载 SQL Server 2005/2008 镜像（兼容 Windows 2003）。
+  2. 挂载镜像，运行安装程序，选择全新安装。
+  3. 在 “服务器配置” 中，所有服务使用管理员账户。
+  4. 启用 “混合模式” 认证，支持远程和本地登录。
+  5. 安装完成后，启动 “SQL Server Management Studio”。
+### 2. 配置 IIS 和 .NET
+- **步骤**：
+  1. 安装 .NET Framework 4.0。
+  2. 将 ASPX 项目复制到 `C:\Inetpub\wwwroot`。
+  3. 在 IIS 管理器中，右键项目文件夹 > “转换为应用程序”。
+  4. 属性中选择 .NET 4.0，禁用其他版本。
+  5. 在 SQL Server 中导入 `.mdb` 数据库文件。
+  6. 在 “安全性” > “登录名” 中添加 `NETWORK SERVICE` 用户，授予数据库权限。
+
+## 九、Tomcat 部署靶场
+### 1. 安装与部署
+- **步骤**：
+  1. 克隆 Windows 2003 虚拟机。
+  2. 下载并安装 JSPStudy（集成 Tomcat）。
+  3. 将 JSP 项目（如 WAR 文件）放入 `Tomcat\webapps` 目录。
+  4. 启动 Tomcat 服务（`startup.bat`）。
+  5. 访问 `http://localhost:8080/<项目名>` 测试。
+
+## 十、JBoss 部署靶场
+### 1. 安装与配置
+- **步骤**：
+  1. 安装 JDK 6 并配置环境变量（`JAVA_HOME`）。
+  2. 下载 JBoss（如 4.x 版本，兼容 Windows 2003）。
+  3. 解压 JBoss，进入 `bin` 目录。
+  4. 运行 `run.bat -b 0.0.0.0`，绑定所有 IP。
+  5. 访问 `http://localhost:8080`，进入管理控制台。
+  6. 上传 WAR 包，部署成功后访问测试。
+  
+## 十一、WebLogic 部署靶场
+### 1. 安装与配置
+- **步骤**：
+  1. 下载 JDK 6 并配置环境变量。
+  2. 下载 WebLogic（如 10.x 版本）。
+  3. 运行安装程序，按提示完成配置。
+  4. 启动 WebLogic 服务（`startWebLogic.cmd`）。
+  5. 访问 `http://localhost:7001/console`，登录并部署 WAR 文件。
+
+## 总结
+通过以上步骤，可以在本地搭建多种靶场环境，包括安卓抓包、PHP 靶场（如 BWAPP、PHPCMS）、在线靶场（如墨者学院），
+以及基于 IIS、ASPX、Tomcat、JBoss 和 WebLogic 的靶场。这些环境涵盖了常见的 Web 技术栈（如 PHP、ASP、JSP、Java EE），
+为渗透测试提供了丰富的实践平台。在实际操作中，建议记录每个步骤的配置细节，并定期快照虚拟机以便回滚。

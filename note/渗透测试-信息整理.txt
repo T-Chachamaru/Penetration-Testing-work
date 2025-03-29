@@ -1,0 +1,128 @@
+# 渗透测试 - 信息整理
+
+## 指纹识别
+### 概述
+通过分析网站特征（如目录结构、文件特征、图标等），识别使用的CMS（内容管理系统）框架。
+### 方法
+1. **CMS目录特征识别**
+   - **WordPress**：存在`wp-admin`目录或`wp-login.php`文件。
+   - 根据CMS典型文件或目录结构判断框架。
+2. **工具与服务**
+   - **云悉指纹识别**：自动化CMS识别。
+   - **潮汐指纹识别**：类似指纹识别工具。
+   - **聚名指纹识别**：CMS判断工具。
+   - **TideFinger脚本**：指纹识别脚本。
+3. **图标MD5值识别**
+   - 通过网站`favicon`（标题旁小图标）的MD5值推断CMS类型。
+4. **浏览器插件**
+   - **Wappalyzer**：快速检测网站技术栈。
+5. **源码搜索**
+   - 在GitHub等平台搜索目标可能的开源代码。
+
+## WAF识别
+### 概述
+WAF（Web应用防火墙）位于源站之前，通过反向代理过滤HTTP请求，防御Web攻击。
+### 特征
+- 触发WAF时常返回`403 Forbidden`。
+- 渗透攻击被拦截时，报错页面可能泄露WAF信息。
+### 方法
+1. **工具检测**
+   - **wafw00f**：专门识别WAF类型。
+2. **插件识别**
+   - **ModSecurity**：常见WAF插件，可能在报错中暴露。
+
+## CDN识别
+### 概述
+通过多种方法判断目标是否使用CDN（内容分发网络），并尝试绕过CDN获取源站IP。
+### 方法
+1. **Ping对比**
+   - 使用超级Ping与普通Ping对比延迟，判断CDN存在。
+2. **多IP检测**
+   - 通过FOFA等搜索引擎查询域名，若返回多个IP，可能使用CDN。
+3. **DNS解析**
+   - 本机DNS解析目标IP，直接映射域名访问，结合SSL证书判断是否为CDN。
+   - 使用国外偏僻地区DNS解析，绕过CDN获取源站IP。
+4. **CMS探针**
+   - CMS框架的探针或配置页面可能泄露真实IP。
+
+## 根据IP反查域名
+### 概述
+当CDN绕过失败时，通过其他途径获取真实IP并反查域名。
+### 方法
+1. **C段扫描**
+   - 对已探测IP的C段进行扫描，寻找目标真实IP。
+2. **在线工具**
+   - 使用站长之家、微步在线等平台的IP反查功能验证源站IP。
+3. **搜索引擎**
+   - 通过FOFA搜索旁站或C段信息。
+
+## Nmap扫描
+### 概述
+利用Nmap扫描目标IP，探测端口状态、服务版本、操作系统等信息。
+### 功能
+- **主机发现**：识别网络中活跃主机。
+- **端口枚举**：扫描目标开放端口。
+- **服务探测**：确定应用程序名称和版本。
+- **OS识别**：推测操作系统和硬件特征。
+- **脚本交互**：结合脚本实现自动化。
+### 基本用法
+#### 扫描模式
+- `-sL`：列出目标IP，不执行主机发现。
+- `-sn`：仅主机发现，不扫描端口。
+- `-Pn`：跳过主机发现，视所有目标为开启。
+- `-PS/PA/PU/PY`：TCP SYN/ACK、SCTP INIT/ECHO发现主机。
+- `-PE/PP/PM`：ICMP echo/timestamp/netmask发现主机。
+- `-PO`：IP协议探测主机状态。
+- `-sS/sT/sA/sW/sM`：TCP SYN/Connect()/ACK/Window/Maimon扫描。
+- `-sU`：UDP端口扫描。
+- `-sN/sF/sX`：TCP Null/FIN/Xmas秘密扫描。
+- `-sI`：Idle scan扫描。
+- `-sY/sZ`：SCTP INIT/COOKIE-ECHO扫描。
+- `-sO`：IP协议类型扫描。
+- `-b`：FTP bounce扫描。
+#### DNS选项
+- `-n`：不进行DNS解析。
+- `-R`：始终进行DNS解析。
+- `--dns-servers`：指定DNS服务器。
+- `--system-dns`：使用系统DNS。
+#### 其他选项
+- `--traceroute`：追踪路由节点。
+- `--scanflags`：定制TCP标志。
+- `-sV`：探测服务版本。
+- `--version-intensity <0-9>`：设置版本探测强度。
+- `--version-light`：轻量探测。
+- `--version-all`：全探针探测。
+- `--version-trace`：显示探测过程。
+- `-O`：操作系统探测。
+- `--osscan-limit`：限制OS探测范围。
+- `--osscan-guess`：大胆猜测OS类型。
+### 示例
+#### 1. 基础扫描
+- **局域网活跃主机**：`nmap -sn 192.168.18.1-100`
+- **公网C段扫描**：
+  - `nmap -sn 152.136.221.1-200`：探测活跃主机。
+  - `nmap -PS/PA 152.136.221.1-200`：扫描开放端口。
+  - `nmap -sV 152.136.221.1-200`：探测服务版本。
+  - `nmap -O 152.136.221.1`：探测操作系统。
+- **子网扫描**：
+  - `nmap 192.168.6.1/24`：扫描整个子网。
+  - `nmap 192.168.1-30.1-254`：多C段扫描。
+- **指定IP列表**：`nmap -iL text.txt`
+- **排除目标**：`nmap 192.168.6.1/24 -exclude 192.168.6.25`
+#### 2. 协议绕过防火墙
+- `nmap -sP/sT/sS/sU/sF/sX/sN 192.33.6.128`：使用不同协议扫描端口。
+#### 3. 端口和服务扫描
+- **常用端口扫描**：
+  ```
+  nmap -T4 -A -v -Pn 192.168.1.1/24 -p 21,22,23,25,80,81,82,83,88,110,143,443,445,512,513,514,1433,1521,2082,2083,2181,2601,2604,3128,3306,3389,3690,4848,5432,5900,5984,6379,7001,7002,8069,8080,8081,8086,8088,9200,9300,11211,10000,27017,27018,50000,50030,50070 -oN nmap_result.txt
+  ```
+- **爆破服务标记**：
+  ```
+  nmap 127.0.0.1 --script=ftp-brute,imap-brute,smtp-brute,pop3-brute,mongodb-brute,redis-brute,ms-sql-brute,rlogin-brute,rsync-brute,mysql-brute,pgsql-brute,oracle-sid-brute,oracle-brute,rtsp-url-brute,snmp-brute,svn-brute,telnet-brute,vnc-brute,xmpp-brute
+  ```
+#### 4. 漏洞扫描
+- **常见漏洞**：`nmap 127.0.0.1 --script=auth,vuln`
+- **精确漏洞扫描**：
+  ```
+  nmap 127.0.0.1 --script=dns-zone-transfer,ftp-anon,ftp-proftpd-backdoor,ftp-vsftpd-backdoor,ftp-vuln-cve2010-4221,http-backup-finder,http-cisco-anyconnect,http-iis-short-name-brute,http-put,http-php-version,http-shellshock,http-robots.txt,http-svn-enum,http-webdav-scan,iis-buffer-overflow,iax2-version,memcached-info,mongodb-info,msrpc-enum,ms-sql-info,mysql-info,nrpe-enum,pptp-version,redis-info,rpcinfo,samba-vuln-cve-2012-1182,smb-vuln-ms08-067,smb-vuln-ms17-010,snmp-info,sshv1,xmpp-info,tftp-enum,teamspeak2-version
+  ```
