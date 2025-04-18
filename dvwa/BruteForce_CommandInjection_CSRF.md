@@ -31,3 +31,20 @@ Command Injection medium——
 Command Injection high——
 过滤了大部分符号,但源代码贴心地给管道符多加了一个空格,让管道符的过滤因此失效。
 ![Command 4](/dvwa/images/Command4.png)
+
+CSRF low——
+csrf是建立在会话上的攻击,该攻击可以在受害者毫不知情的情况下以受害者的名义伪造请求发送给受攻击站点,从而在未授权的情况下执行在权限保护之下的操作
+通过测试,能发现修改密码的请求参数暴露在uri里
+![CSRF 1](/dvwa/images/csrf1.png)
+因此如果我们了解参数结构,在一个用户处于会话中时,用某种方式使用户点击由我们构造的链接,接下来就可以把用户的密码修改成我们想要的密码,就像这样。
+![CSRF 2](/dvwa/images/csrf2.png)
+
+CSRF medium——
+可以看到源代码中使用stripos检查host和referer的值,如果referer中的值和host中的值匹配,则会允许操作。
+![CSRF 3](/dvwa/images/csrf3.png)
+因此可以构造一个html页面,这个页面的名字是host的值,点击超链接便会向修改密码的页面发送请求
+![CSRF 4](/dvwa/images/csrf4.png)
+![CSRF 5](/dvwa/images/csrf5.png)
+
+CSRF high——
+这里添加了checkToken函数验证token值,用户每次访问修改密码的页面便会返回到一个随机的token,只有同时提交了这个随机token才有可能访问成功。要利用此漏洞只能用存储型XSS之类的攻击获取用户的即时token,才能成功发起攻击
