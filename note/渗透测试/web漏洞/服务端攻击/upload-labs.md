@@ -54,7 +54,7 @@
     *   **原理**: 自 PHP 5.3.0 起，在 CGI/FastCGI 模式下，PHP 会在执行脚本前扫描其所在目录及上级目录（直至 Web 根目录）是否存在名为 `.user.ini` (可通过 `user_ini.filename` 配置) 的文件，并将其中的配置指令应用于该目录。
     *   **前提**: 服务器使用 CGI/FastCGI 模式运行 PHP；上传目录下有可被执行的 PHP 文件（即使是正常的业务文件）；允许上传 `.ini` 文件或能绕过后缀检查上传 `.user.ini`。
     *   **利用**: 上传一个名为 `.user.ini` 的文件，内容利用 `auto_prepend_file` 或 `auto_append_file` 指令来自动包含上传的 Webshell 文件（例如一个图片马 `webshell.jpg`）。
-        ```ini
+        ```
         ; .user.ini
         auto_prepend_file=webshell.jpg
         ```
