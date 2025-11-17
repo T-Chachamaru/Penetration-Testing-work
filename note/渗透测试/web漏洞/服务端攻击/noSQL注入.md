@@ -139,5 +139,3 @@ NoSQL 注入的根本原因与 SQL 注入类似：**将不受信任的用户输�
 *   **`mapReduce`, `group`:** (旧版，或特定场景) 也可能涉及服务器端 JavaScript 执行，存在风险。
 
 **参考:** 始终查阅最新的 [MongoDB 官方文档](https://docs.mongodb.com/manual/reference/operator/query/) 获取最全面、准确的操作符信息。
-
----

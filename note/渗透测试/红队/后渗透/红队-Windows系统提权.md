@@ -1,3 +1,11 @@
+
+#### 目录
+- [初始 Shell 环境修复](#初始-shell-环境修复-initial-shell-environment-fix)
+- [提权信息收集命令](#提权信息收集命令-common-info-gathering-commands-for-privesc)
+- [提权方法](#提权方法-escalation-techniques)
+- [自动化权限提升检查工具](#自动化权限提升检查工具-automated-privesc-check-tools)
+- [提权后操作](#提权后操作获取管理员密码哈希-post-escalation-retrieving-admin-credentials)
+
 #### 概述 (Overview)
 
 在获得 Windows 系统的初步访问权限（如 Webshell 或低权限用户会话）后，通常需要提升权限至更高等级，以便完全控制目标系统、安装持久化后门、访问敏感数据（如 SAM 文件）或进行更深入的内网渗透。

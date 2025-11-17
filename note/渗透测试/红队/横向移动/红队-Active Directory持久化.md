@@ -1,4 +1,11 @@
-### 持久化 (Persistence)
+
+#### 目录
+- [通过凭证复制实现持久化](#通过凭证复制实现持久化-persistence-via-credential-replication)
+- [通过 Kerberos 票据实现持久化](#通过-kerberos-票据实现持久化-persistence-via-kerberos-tickets)
+- [通过 AD 证书服务实现持久化](#通过-ad-证书服务实现持久化-persistence-via-ad-certificate-services)
+- [通过 SID 历史实现持久化](#通过-sid-历史实现持久化-persistence-via-sid-history)
+- [通过隐蔽的组成员资格实现持久化](#通过隐蔽的组成员资格实现持久化-persistence-via-covert-group-membership)
+- [通过 ACL 和 GPO 实现持久化](#通过-acl-和-gpo-实现持久化-persistence-via-acls-and-gpos)
 
 #### 概述 (Overview)
 

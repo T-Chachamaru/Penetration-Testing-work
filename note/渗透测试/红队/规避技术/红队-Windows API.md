@@ -1,3 +1,13 @@
+
+#### 目录
+- [Windows API 的组成部分](#windows-api-的组成部分-components-of-the-windows-api)
+- [操作系统库与地址获取](#操作系统库与地址获取-operating-system-libraries-and-address-retrieval)
+- [API 调用结构详解](#api-调用结构详解-api-call-structure-explained)
+- [C/C++ 中的 API 调用](#cc-中的-api-调用-api-calls-in-cc)
+- [.NET 和 PowerShell 中的 API 实现](#net-和-powershell-中的-api-实现-net-and-powershell-api-implementation)
+- [常见被滥用的 API 调用](#常见被滥用的-api-调用-commonly-abused-api-calls)
+- [恶意软件案例研究](#恶意软件案例研究-malware-case-studies)
+
 #### 概述 (Overview)
 
 应用程序在运行过程中，常常需要与 Windows 子系统或硬件进行交互，例如访问文件、修改注册表、或者直接与硬件设备通信。然而，出于系统稳定性和安全性的考虑，应用程序对这些资源的直接访问受到了严格的限制。为了提供一个标准且受控的交互方式，微软引入了 Win32 API (Windows Application Programming Interface)。Win32 API 是一系列函数的集合，充当用户模式应用程序与操作系统内核之间的桥梁，使得应用程序能够请求内核执行特权操作。

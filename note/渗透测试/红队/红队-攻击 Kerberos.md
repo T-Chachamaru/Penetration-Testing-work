@@ -1,3 +1,4 @@
+
 #### Kerberos 基础 (Kerberos Fundamentals)
 
 **Kerberos** 是 Microsoft Windows 域环境的默认认证协议，旨在通过使用票据授权和强加密来提供比 NTLM 更安全的认证。

@@ -1,3 +1,9 @@
+
+#### 目录
+- [利用进程：注入与操纵技术](#利用进程注入与操纵技术-exploiting-processes-injection-and-manipulation-techniques)
+- [内存执行替代方案](#内存执行替代方案-memory-execution-alternatives-)
+- [案例研究：浏览器注入与挂钩](#案例研究浏览器注入与挂钩-trickbot-的-ttp-️️)
+
 #### 概述：Windows 内核与内部机制 (Overview: Windows Kernel and Internals)
 
 **Windows 内核 (Windows Kernel)** 是 Windows 操作系统得以运行的核心组件，它负责管理系统资源、调度任务、处理硬件交互等关键功能。正因其核心地位，Windows 内核也成为了攻击者寻求恶意利用、权限提升、隐蔽执行及规避检测的重点目标。攻击者可能利用内核漏洞、驱动程序缺陷或内核对象的特性来执行恶意代码、隐藏活动痕迹，并与其他用户模式下的攻击技术或漏洞利用链相结合，以达到更深层次的系统控制。

@@ -1,3 +1,12 @@
+
+#### 目录
+- [Shellcode 技术详解](#shellcode-技术详解-shellcode-techniques-explained)
+- [分阶段与无阶段 Shellcode 载荷](#分阶段与无阶段-shellcode-载荷-staged-vs-stageless-shellcode-payloads)
+- [使用 MSFVenom 进行编码与加密](#使用-msfvenom-进行编码与加密-encoding-and-encryption-with-msfvenom)
+- [创建自定义有效载荷以规避检测](#创建自定义有效载荷以规避检测-creating-custom-payloads-for-evasion)
+- [加壳器](#加壳器-packers)
+- [绑定器](#绑定器-binders)
+
 #### 概述：Windows PE 可移植可执行文件格式 (Overview: Windows PE - Portable Executable Format)
 
 Windows 可执行文件格式，即 **PE (Portable Executable) 格式**，是一种标准化的文件结构，它封装了 Windows 操作系统加载和执行程序所需的全部信息。这种格式不仅定义了可执行代码在磁盘上的组织方式，还指导着 Windows 和 DOS 加载器如何将文件内容解析、映射到内存中并最终运行。

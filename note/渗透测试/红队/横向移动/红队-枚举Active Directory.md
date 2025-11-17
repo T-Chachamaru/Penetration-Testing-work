@@ -1,3 +1,11 @@
+
+#### 目录
+- [绘制网络拓扑](#绘制网络拓扑-drawing-the-network-topology)
+- [服务枚举与利用](#服务枚举与利用-service-enumeration-and-exploitation)
+- [用户枚举与密码攻击](#用户枚举与密码攻击-user-enumeration-and-password-attacks)
+- [准备工作：凭证注入](#准备工作凭证注入-preparation-credential-injection)
+- [枚举方法](#枚举方法-enumeration-methods)
+
 #### 概述 (Overview)
 
 一旦通过初始访问获得了一组有效的活动目录 (Active Directory, AD) 凭证，攻击的下一阶段便是**已认证枚举 (Authenticated Enumeration)**。即便使用非常低权限的账户，攻击者也能查询 AD 的结构、配置和对象，从而打开一个充满可能性的新世界。
@@ -43,7 +51,7 @@
     ```
     
 
-#### 2服务枚举与利用 (Service Enumeration and Exploitation)
+#### 服务枚举与利用 (Service Enumeration and Exploitation)
 
 在没有有效凭证的情况下，我们的目标是利用配置不当的服务进行匿名枚举。
 

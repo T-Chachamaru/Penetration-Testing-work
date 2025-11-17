@@ -1,3 +1,11 @@
+
+#### 目录
+- [利用访问控制列表 (ACL) 委派](#利用访问控制列表-acl-委派-exploiting-acl-delegation)
+- [利用 Kerberos 委派](#利用-kerberos-委派-exploiting-kerberos-delegation)
+- [利用认证中继](#利用认证中继-exploiting-authentication-relaying)
+- [利用 AD 证书服务](#利用-ad-证书服务-ad-cs-exploiting-ad-certificate-services)
+- [利用域信任](#利用域信任-exploiting-domain-trusts)
+
 #### 概述 (Overview)
 
 在 Active Directory (AD) 中，**委派 (Delegation)** 是一项核心功能，它允许将特定的权限和特权授予非管理员用户或服务，以实现分布式管理。例如，域管理员 (DA) 可以将“重置用户密码”的权限委派给帮助台团队，而无需授予他们完全的管理权限。

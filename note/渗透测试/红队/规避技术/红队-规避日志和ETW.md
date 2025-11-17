@@ -1,3 +1,10 @@
+
+#### 目录
+- [TW (Windows 事件跟踪 - Event Tracing for Windows) 详解](#etw-windows-事件跟踪---event-tracing-for-windows-详解)
+- [规避日志记录的方法](#规避日志记录的方法-methods-of-evading-logging)
+- [针对 ETW 提供程序的规避技术](#针对-etw-提供程序的规避技术-evasion-techniques-targeting-etw-providers)
+- [针对 ETW 控制器/核心函数的规避技术](#针对-etw-控制器核心函数的规避技术-evasion-techniques-targeting-etw-controllerscore-functions)
+
 #### 概述：日志记录与监控 (Logging and Monitoring Overview)
 
 对于攻击者而言，在攻击路径上所面临的最大障碍之一便是目标系统和网络中的**日志记录与监控 (Logging and Monitoring)** 机制。与反病毒 (AV) 和终端检测与响应 (EDR) 解决方案可能实时阻止恶意行为不同，日志记录会创建关于系统活动的**物理记录 (Physical Records)**，这些记录可以在事后被安全团队用于分析恶意活动、追踪攻击路径并进行溯源。

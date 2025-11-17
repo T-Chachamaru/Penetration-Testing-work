@@ -1,3 +1,9 @@
+
+#### 目录
+- [初始信息收集](#初始信息收集-initial-information-gathering)
+- [自动化枚举工具](#自动化枚举工具-automated-enumeration-tools)
+- [提权方法](#提权方法-escalation-techniques)
+
 #### 概述 (Overview)
 
 获取 Linux 系统的低权限 Shell 后，目标是提升至 root 用户权限，以获得对系统的完全控制。正如在渗透测试中，获得初始 Shell 并非结束，后渗透阶段的信息收集与利用与前期同样重要。Linux 提权方法多样，涉及内核漏洞、配置错误、SUID/SGID 程序利用、计划任务劫持、密码复用、环境变量劫持、错误配置的网络共享等。

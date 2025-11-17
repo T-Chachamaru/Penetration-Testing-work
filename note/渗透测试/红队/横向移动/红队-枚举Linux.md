@@ -1,3 +1,14 @@
+
+#### 目录
+- [升级终端](#升级终端-upgrading-the-shell)
+- [建立稳定的 SSH 访问](#建立稳定的-ssh-访问-establishing-stable-ssh-access)
+- [基础信息收集](#基础信息收集-basic-information-gathering)
+- [探索 `/etc` 目录](#探索-etc-目录-exploring-the-etc-directory)
+- [查找敏感文件](#查找敏感文件-finding-sensitive-files)
+- [枚举 SUID 文件](#枚举-suid-文件-enumerating-suid-files)
+- [枚举网络连接](#枚举网络连接-enumerating-network-connections)
+- [使用自动化枚举脚本](#使用自动化枚举脚本-using-automated-enumeration-scripts)
+
 #### 升级终端 (Upgrading the Shell)
 
 在获得初始反向 Shell 后，通常需要将其升级为一个功能齐全的、交互式的 TTY 终端，以便使用 `Tab` 补全、`Ctrl+C` 等功能。
